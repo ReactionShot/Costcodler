@@ -15,7 +15,7 @@ costcodle/
 ├── package.json       ← Node.js dependencies
 ├── app/
 │   ├── bot.js         ← Main application
-│   ├── public/
+│   └── public/
 │       └── index.html ← Dashboard   
 └── data/              ← Will be created automatically
 ```
