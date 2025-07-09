@@ -16,7 +16,6 @@ costcodle/
 ├── app/
 │   ├── bot.js         ← Main application
 │   ├── public/
-│       └── index.html ← Dashboard
-│   
+│       └── index.html ← Dashboard   
 └── data/              ← Will be created automatically
 ```
