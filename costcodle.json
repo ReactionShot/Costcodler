@@ -1,0 +1,19 @@
+{
+    "TCP": {
+      "443": {
+        "HTTPS": true
+      }
+    },
+    "Web": {
+      "costcodle.(insert your tailscale magicdns).ts.net:443": {
+        "Handlers": {
+          "/": {
+            "Proxy": "http://0.0.0.0:3000"
+          }
+        }
+      }
+    },
+    "AllowFunnel": {
+      "costcodle.(insert your tailscale magicdns).ts.net:443": true
+    }
+}
