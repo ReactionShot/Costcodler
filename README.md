@@ -10,7 +10,7 @@ This repository uses a docker compose file with a tailscale sidecar to host a [f
 Make sure you have these files in your directory:
 ```
 costcodle/
-├── docker-compose.yml  ← Your compose file
+├── compose.yaml  ← Your compose file
 ├── .env               ← DISCORD_TOKEN=your_token_here
 ├── package.json       ← Node.js dependencies
 ├── app/
