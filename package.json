@@ -2,25 +2,33 @@
   "name": "costcodle-tracker",
   "version": "1.0.0",
   "description": "Discord bot to track Costcodle scores and display statistics",
-  "main": "bot.js",
+  "main": "bot/server.js",
   "scripts": {
-    "start": "node bot.js",
-    "dev": "nodemon bot.js"
+    "start": "node bot/server.js",
+    "dev": "nodemon --watch bot --watch web bot/server.js",
+    "dev:no-discord": "NODE_ENV=development nodemon --watch bot --watch web bot/server.js",
+    "lint": "eslint bot/**/*.js web/js/*.js"
   },
   "dependencies": {
+    "cors": "^2.8.5",
     "discord.js": "^14.14.1",
     "express": "^4.18.2",
-    "sqlite3": "^5.1.6",
-    "cors": "^2.8.5",
     "express-rate-limit": "^7.1.5",
     "helmet": "^7.1.0",
+    "sqlite3": "^5.1.6",
     "validator": "^13.11.0"
   },
   "devDependencies": {
+    "live-server": "^1.2.2",
     "nodemon": "^3.0.2"
   },
   "engines": {
     "node": ">=18.0.0"
   },
-  "keywords": ["discord", "bot", "costcodle", "tracking"]
+  "keywords": [
+    "discord",
+    "bot",
+    "costcodle",
+    "tracking"
+  ]
 }

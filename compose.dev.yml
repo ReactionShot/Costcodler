@@ -1,0 +1,15 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: costcodle-dev
+    environment:
+      - DISCORD_TOKEN=${DISCORD_TOKEN}
+      - NODE_ENV=development
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./:/usr/src/app          # Live‑reload your entire repo
+      - /opt/costcodle/data:/data
+    command: npx nodemon --watch bot --watch web bot/server.js 
