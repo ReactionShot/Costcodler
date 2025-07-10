@@ -97,30 +97,35 @@ async function scrapeHistoricalMessages(channelId, limit = 10000) {
 
         let savedCount = 0;
         for (const message of messages) {
-            if (message.author.bot) continue;
+			if (message.author.bot) continue;
 
-            const result = parseCostcodleScore(message.content);
-            if (result !== null) {
-                try {
-                    await saveScore(
-                        message.author.id,
-                        message.author.username,
-                        result.score,
-                        result.failed,
-                        message.createdAt.toISOString().split('T')[0],
-                        message.id,
-                        message.content,
-                        message.createdAt.toISOString()
-                    );
-                    savedCount++;
-                } catch (error) {
-                    // Ignore duplicate entries but log other errors
-                    if (!error.message.includes('UNIQUE constraint failed')) {
-                        console.error('Error saving historical score:', error.message);
-                    }
-                }
-            }
-        }
+			const result = parseCostcodleScore(message.content);
+			if (result !== null) {
+				try {
+					// Convert Discord message timestamp to EST (same as current messageCreate handler)
+					const messageDate = new Date(message.createdAt);
+					const estDate = new Date(messageDate.toLocaleString("en-US", {timeZone: "America/New_York"}));
+					const gameDate = estDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+
+					await saveScore(
+						message.author.id,
+						message.author.username,
+						result.score,
+						result.failed,
+						gameDate, // ← Use the new EST-adjusted date
+						message.id,
+						message.content,
+						message.createdAt.toISOString()
+					);
+					savedCount++;
+				} catch (error) {
+					// Ignore duplicate entries but log other errors
+					if (!error.message.includes('UNIQUE constraint failed')) {
+						console.error('Error saving historical score:', error.message);
+					}
+				}
+			}
+		}
 
         console.log(`Scraped ${savedCount} historical scores from ${messages.length} messages`);
         return savedCount;
@@ -145,8 +150,8 @@ async function checkAndScrapeIfEmpty() {
             if (count === 0) {
                 console.log('Database is empty, starting historical scrape...');
                 try {
-                    // Hardcoded channel ID - INPUT CHANNEL ID
-                    // const CHANNEL_ID = '';
+                    // Hardcoded channel ID for automatic scraping
+                    //const CHANNEL_ID = '';
                     const scrapedCount = await scrapeHistoricalMessages(CHANNEL_ID);
                     console.log(`✅ Automatic historical scrape completed: ${scrapedCount} scores imported`);
                     resolve(scrapedCount);
@@ -238,7 +243,7 @@ app.use('/api/', generalLimiter);
 // CORS configuration - restrict to specific origins in production
 const corsOptions = {
     origin: process.env.NODE_ENV === 'production'
-        ? ['http://localhost:3000', 'https://yourdomain.com'] // INPUT YOUR DOMAIN
+        ? ['http://localhost:3000', 'https://yourdomain.com'] // Updated domain
         : true,
     credentials: true
 };
