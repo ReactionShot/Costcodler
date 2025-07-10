@@ -1184,123 +1184,141 @@
             container.innerHTML = html;
         }
 
-        // Update score heatmap with larger text and more vertical space - FIXED to show multiple scores per day
-        function updateScoreHeatmap() {
-            const container = document.getElementById('scoreHeatmap');
+        // Update score heatmap with larger text and more vertical space - FIXED to show multiple scores per day + Discord links
+		function updateScoreHeatmap() {
+			const container = document.getElementById('scoreHeatmap');
 
-            if (allScores.length === 0) {
-                container.innerHTML = '<p>No data available</p>';
-                return;
-            }
+			if (allScores.length === 0) {
+				container.innerHTML = '<p>No data available</p>';
+				return;
+			}
 
-            // Group scores by user and date - FIXED to handle multiple scores per day
-            const users = [...new Set(allScores.map(s => s.username))].sort();
-            const dates = [...new Set(allScores.map(s => s.date))].sort();
+			// Group scores by user and date - FIXED to handle multiple scores per day
+			const users = [...new Set(allScores.map(s => s.username))].sort();
+			const dates = [...new Set(allScores.map(s => s.date))].sort();
 
-            const scoreMatrix = {};
-            users.forEach(user => {
-                scoreMatrix[user] = {};
-                dates.forEach(date => {
-                    // Get ALL scores for this user on this date, not just the first one
-                    const userScoresForDate = allScores.filter(s => s.username === user && s.date === date);
+			const scoreMatrix = {};
+			users.forEach(user => {
+				scoreMatrix[user] = {};
+				dates.forEach(date => {
+					// Get ALL scores for this user on this date, not just the first one
+					const userScoresForDate = allScores.filter(s => s.username === user && s.date === date);
 
-                    if (userScoresForDate.length > 0) {
-                        // If multiple scores on same day, show the best one (lowest number)
-                        const bestScore = userScoresForDate.reduce((best, current) => {
-                            if (current.failed && !best.failed) return best;
-                            if (!current.failed && best.failed) return current;
-                            if (current.failed && best.failed) return best; // Both failed, keep first
-                            return current.score < best.score ? current : best;
-                        });
-                        scoreMatrix[user][date] = bestScore;
-                    } else {
-                        scoreMatrix[user][date] = null;
-                    }
-                });
-            });
+					if (userScoresForDate.length > 0) {
+						// If multiple scores on same day, show the best one (lowest number)
+						const bestScore = userScoresForDate.reduce((best, current) => {
+							if (current.failed && !best.failed) return best;
+							if (!current.failed && best.failed) return current;
+							if (current.failed && best.failed) return best; // Both failed, keep first
+							return current.score < best.score ? current : best;
+						});
+						scoreMatrix[user][date] = bestScore;
+					} else {
+						scoreMatrix[user][date] = null;
+					}
+				});
+			});
 
-            // Create heatmap HTML with larger text and more vertical space
-            let html = `
-                <div style="display: flex; font-size: 16px; font-family: monospace;">
-                    <div style="width: 150px; flex-shrink: 0;">
-                        <div style="height: 40px;"></div>
-            `;
+			// Create heatmap HTML with larger text and more vertical space
+			let html = `
+				<div style="display: flex; font-size: 16px; font-family: monospace;">
+					<div style="width: 150px; flex-shrink: 0;">
+						<div style="height: 40px;"></div>
+			`;
 
-            users.forEach(user => {
-                html += `<div style="height: 45px; line-height: 45px; padding-right: 15px; text-align: right; font-weight: bold; font-size: 14px;">${user}</div>`;
-            });
+			users.forEach(user => {
+				html += `<div style="height: 45px; line-height: 45px; padding-right: 15px; text-align: right; font-weight: bold; font-size: 14px;">${user}</div>`;
+			});
 
-            html += '</div><div style="overflow-x: auto; flex-grow: 1;"><div style="display: flex;">';
+			html += '</div><div style="overflow-x: auto; flex-grow: 1;"><div style="display: flex;">';
 
-            dates.forEach(date => {
-                const shortDate = date.slice(5); // MM-DD format
-                html += `
-                    <div style="width: 40px; margin-right: 3px;">
-                        <div style="height: 40px; line-height: 40px; text-align: center; font-size: 12px; transform: rotate(-45deg); transform-origin: center;">${shortDate}</div>
-                `;
+			dates.forEach(date => {
+				const shortDate = date.slice(5); // MM-DD format
+				html += `
+					<div style="width: 40px; margin-right: 3px;">
+						<div style="height: 40px; line-height: 40px; text-align: center; font-size: 12px; transform: rotate(-45deg); transform-origin: center;">${shortDate}</div>
+				`;
 
-                users.forEach(user => {
-                    const score = scoreMatrix[user][date];
-                    let bgColor = '#f0f0f0';
-                    let textColor = '#999';
-                    let displayText = '—';
+				users.forEach(user => {
+					const score = scoreMatrix[user][date];
+					let bgColor = '#f0f0f0';
+					let textColor = '#999';
+					let displayText = '—';
+					let cellContent = '';
 
-                    if (score) {
-                        if (score.failed) {
-                            bgColor = '#2c3e50';
-                            textColor = 'white';
-                            displayText = 'X';
-                        } else {
-                            // Color gradient from green (1) to red (6)
-                            const colors = ['#27ae60', '#2ecc71', '#f39c12', '#e67e22', '#e74c3c', '#c0392b'];
-                            bgColor = colors[score.score - 1];
-                            textColor = 'white';
-                            displayText = score.score;
-                        }
-                    }
+					if (score) {
+						if (score.failed) {
+							bgColor = '#2c3e50';
+							textColor = 'white';
+							displayText = 'X';
+						} else {
+							// Color gradient from green (1) to red (6)
+							const colors = ['#27ae60', '#2ecc71', '#f39c12', '#e67e22', '#e74c3c', '#c0392b'];
+							bgColor = colors[score.score - 1];
+							textColor = 'white';
+							displayText = score.score;
+						}
 
-                    html += `
-                        <div style="
-                            width: 37px;
-                            height: 45px;
-                            background-color: ${bgColor};
-                            color: ${textColor};
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            font-weight: bold;
-                            font-size: 16px;
-                            border: 1px solid #ddd;
-                        " title="${user} on ${date}: ${score ? (score.failed ? 'Failed' : `Score ${score.score}`) : 'No score'}">${displayText}</div>
-                    `;
-                });
+						// Create Discord link if message_id exists
+						if (score.message_id) {
+							const discordLink = `https://discord.com/channels/577258915402612757/1381727975548125346/${score.message_id}`;
+							cellContent = `<a href="${discordLink}" target="_blank" style="color: ${textColor}; text-decoration: none; display: block; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">${displayText}</a>`;
+						} else {
+							cellContent = displayText;
+						}
+					} else {
+						cellContent = displayText;
+					}
 
-                html += '</div>';
-            });
+					const tooltipText = score ? 
+						(score.failed ? 'Failed' : `Score ${score.score}`) + 
+						(score.message_id ? ' (Click to view Discord message)' : '') : 
+						'No score';
 
-            html += '</div></div></div>';
+					html += `
+						<div style="
+							width: 37px;
+							height: 45px;
+							background-color: ${bgColor};
+							color: ${textColor};
+							display: flex;
+							align-items: center;
+							justify-content: center;
+							font-weight: bold;
+							font-size: 16px;
+							border: 1px solid #ddd;
+							${score && score.message_id ? 'cursor: pointer;' : ''}
+						" title="${user} on ${date}: ${tooltipText}">${cellContent}</div>
+					`;
+				});
 
-            // Add legend with larger text
-            html += `
-                <div style="margin-top: 25px; display: flex; align-items: center; gap: 20px; font-size: 16px;">
-                    <span style="font-weight: bold;">Legend:</span>
-                    <div style="display: flex; gap: 8px;">
-                        <div style="width: 30px; height: 30px; background: #27ae60; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px;">1</div>
-                        <div style="width: 30px; height: 30px; background: #2ecc71; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px;">2</div>
-                        <div style="width: 30px; height: 30px; background: #f39c12; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px;">3</div>
-                        <div style="width: 30px; height: 30px; background: #e67e22; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px;">4</div>
-                        <div style="width: 30px; height: 30px; background: #e74c3c; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px;">5</div>
-                        <div style="width: 30px; height: 30px; background: #c0392b; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px;">6</div>
-                        <div style="width: 30px; height: 30px; background: #2c3e50; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px;">X</div>
-                        <div style="width: 30px; height: 30px; background: #f0f0f0; color: #999; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px;">—</div>
-                    </div>
-                    <span style="margin-left: 15px; color: #666; font-size: 14px;">Green = Better, Red = Worse, X = Failed, — = No Score</span>
-                    <span style="margin-left: 15px; color: #666; font-size: 12px; font-style: italic;">*Shows best score when multiple games played same day</span>
-                </div>
-            `;
+				html += '</div>';
+			});
 
-            container.innerHTML = html;
-        }
+			html += '</div></div></div>';
+
+			// Add legend with larger text
+			html += `
+				<div style="margin-top: 25px; display: flex; align-items: center; gap: 20px; font-size: 16px;">
+					<span style="font-weight: bold;">Legend:</span>
+					<div style="display: flex; gap: 8px;">
+						<div style="width: 30px; height: 30px; background: #27ae60; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px;">1</div>
+						<div style="width: 30px; height: 30px; background: #2ecc71; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px;">2</div>
+						<div style="width: 30px; height: 30px; background: #f39c12; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px;">3</div>
+						<div style="width: 30px; height: 30px; background: #e67e22; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px;">4</div>
+						<div style="width: 30px; height: 30px; background: #e74c3c; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px;">5</div>
+						<div style="width: 30px; height: 30px; background: #c0392b; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px;">6</div>
+						<div style="width: 30px; height: 30px; background: #2c3e50; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px;">X</div>
+						<div style="width: 30px; height: 30px; background: #f0f0f0; color: #999; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px;">—</div>
+					</div>
+					<span style="margin-left: 15px; color: #666; font-size: 14px;">Green = Better, Red = Worse, X = Failed, — = No Score</span>
+					<span style="margin-left: 15px; color: #666; font-size: 12px; font-style: italic;">*Shows best score when multiple games played same day</span>
+					<span style="margin-left: 15px; color: #667eea; font-size: 12px; font-weight: bold;">Click scores to view Discord messages</span>
+				</div>
+			`;
+
+			container.innerHTML = html;
+		}
 
         // Get performance badge based on average score
         function getPerformanceBadge(avgScore) {
