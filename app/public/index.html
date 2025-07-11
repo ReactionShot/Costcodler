@@ -69,6 +69,19 @@
             background: #5a6fd8;
         }
 
+        .controls button.head-to-head {
+            background: #e74c3c;
+        }
+
+        .controls button.head-to-head:hover {
+            background: #c0392b;
+        }
+
+        .controls button.head-to-head.active {
+            background: #c0392b;
+            box-shadow: 0 0 10px rgba(231, 76, 60, 0.3);
+        }
+
         .grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -244,6 +257,7 @@
         <div class="controls">
             <button id="refreshBtn">Refresh Data</button>
             <button id="exportBtn">Export CSV</button>
+            <button id="headToHeadBtn" class="head-to-head">⚔️ Head to Head</button>
             <span id="lastUpdate" style="margin-left: 20px; color: #666;"></span>
         </div>
 
@@ -310,7 +324,7 @@
 
             <div class="card full-width">
                 <h2>🗓️ Score Heatmap</h2>
-                <div id="heatmapContainer" style="height: 600px; overflow-x: auto;">
+                <div id="heatmapContainer" style="height: 700px; overflow-x: auto;">
                     <div id="scoreHeatmap"></div>
                 </div>
             </div>
@@ -324,12 +338,22 @@
         let currentMonthOffset = 0; // 0 = current month, -1 = previous month, etc.
         let userAchievements = {}; // Store achievements for all users
         let achievementsExpanded = true; // Track if achievements are expanded
+        let headToHeadMode = false; // Track if head-to-head mode is active
 
         // Hardcoded channel ID - INPUT CHANNEL ID
         const CHANNEL_ID = '';
 
         // API base URL - adjust this to your server
         const API_BASE = window.location.origin + '/api';
+
+        // Head-to-head players
+        const HEAD_TO_HEAD_PLAYERS = ['.cyco', 'clicky6792'];
+
+        // Filter data for head-to-head mode
+        function filterDataForHeadToHead(data) {
+            if (!headToHeadMode) return data;
+            return data.filter(item => HEAD_TO_HEAD_PLAYERS.includes(item.username));
+        }
 
         // Initialize dashboard
         async function init() {
@@ -338,6 +362,7 @@
             // Set up event listeners
             document.getElementById('refreshBtn').addEventListener('click', refreshData);
             document.getElementById('exportBtn').addEventListener('click', exportData);
+            document.getElementById('headToHeadBtn').addEventListener('click', toggleHeadToHead);
             document.getElementById('prevMonthBtn').addEventListener('click', () => {
                 currentMonthOffset--;
                 updateMonthlyLeaderboard();
@@ -359,6 +384,58 @@
                     showUserAchievements(username);
                 }
             });
+        }
+
+        // Store chart instances globally for proper cleanup
+        let trendsChart = null;
+        let distributionChart = null;
+        let dailyChart = null;
+        let progressChart = null;
+
+        // Toggle head-to-head mode
+        function toggleHeadToHead() {
+            headToHeadMode = !headToHeadMode;
+            const btn = document.getElementById('headToHeadBtn');
+
+            if (headToHeadMode) {
+                btn.textContent = 'Show All Players';
+                btn.classList.add('active');
+                showMessage('Head-to-Head mode: Showing only .cyco vs clicky6792', 'info');
+            } else {
+                btn.textContent = '⚔️ Head to Head';
+                btn.classList.remove('active');
+                showMessage('Showing all players', 'info');
+            }
+
+            // Destroy existing charts before recreating
+            if (trendsChart) {
+                trendsChart.destroy();
+                trendsChart = null;
+            }
+            if (distributionChart) {
+                distributionChart.destroy();
+                distributionChart = null;
+            }
+            if (dailyChart) {
+                dailyChart.destroy();
+                dailyChart = null;
+            }
+            if (progressChart) {
+                progressChart.destroy();
+                progressChart = null;
+            }
+
+            // Refresh all widgets with new filter
+            updateUserStatsTable();
+            updateTrendsChart();
+            updateDistributionChart();
+            updateDailyChart();
+            updateProgressChart();
+            updateScoreHeatmap();
+            updatePerformanceSummary();
+            updateAchievements();
+            updateAchievementsWidget();
+            updateMonthlyLeaderboard();
         }
 
         // Refresh all data
@@ -450,8 +527,16 @@
                 return;
             }
 
+            // Filter user stats for head-to-head mode
+            const filteredUserStats = filterDataForHeadToHead(userStats);
+
+            if (filteredUserStats.length === 0) {
+                container.innerHTML = '<p>No data available for selected players</p>';
+                return;
+            }
+
             // Calculate additional stats for each user
-            const enhancedStats = userStats.map(user => {
+            const enhancedStats = filteredUserStats.map(user => {
                 const userScores = allScores.filter(s => s.username === user.username);
 
                 // Sort by date for streak and date calculations
@@ -525,16 +610,6 @@
             container.innerHTML = html;
         }
 
-        // Get achievement icons for a user
-        function getAchievementIcons(username) {
-            if (!userAchievements[username]) return '';
-
-            return userAchievements[username]
-                .filter(achievement => achievement.earned)
-                .map(achievement => `<span class="achievement-icon" data-tooltip="${achievement.title}: ${achievement.desc}">${achievement.icon}</span>`)
-                .join(' ');
-        }
-
         // Update achievements widget - now full width with better layout
         function updateAchievementsWidget(specificUser = null) {
             const container = document.getElementById('achievementsWidget');
@@ -544,14 +619,17 @@
                 return;
             }
 
-            // Filter to specific user if requested
+            // Filter to specific user if requested, or apply head-to-head filter
             let usersToShow;
             if (specificUser) {
                 usersToShow = [[specificUser, userAchievements[specificUser] || []]];
             } else {
-                // Sort users by number of achievements
+                // Apply head-to-head filter if active
                 usersToShow = Object.entries(userAchievements)
-                    .filter(([username, achievements]) => achievements.length > 0)
+                    .filter(([username, achievements]) => {
+                        if (!headToHeadMode) return achievements.length > 0;
+                        return HEAD_TO_HEAD_PLAYERS.includes(username) && achievements.length > 0;
+                    })
                     .sort((a, b) => b[1].length - a[1].length);
             }
 
@@ -640,21 +718,15 @@
                 updateAchievementsWidget(); // Show all users again
             }
         }
-        function updateStatsView() {
-            const views = ['Score Distribution', 'Performance Summary'];
-            document.getElementById('currentStatsDisplay').textContent = views[currentStatsView];
 
-            if (currentStatsView === 0) {
-                document.getElementById('distributionView').style.display = 'block';
-                document.getElementById('performanceView').style.display = 'none';
-            } else {
-                document.getElementById('distributionView').style.display = 'none';
-                document.getElementById('performanceView').style.display = 'block';
-            }
-        }
         function calculateDailyWins(username) {
+            // Filter scores for head-to-head mode
+            const scoresToConsider = headToHeadMode ?
+                allScores.filter(s => HEAD_TO_HEAD_PLAYERS.includes(s.username)) :
+                allScores;
+
             const dailyScores = {};
-            allScores.forEach(score => {
+            scoresToConsider.forEach(score => {
                 if (!dailyScores[score.date]) {
                     dailyScores[score.date] = [];
                 }
@@ -725,11 +797,15 @@
             nextBtn.style.opacity = currentMonthOffset >= 0 ? '0.5' : '1';
             nextBtn.style.cursor = currentMonthOffset >= 0 ? 'not-allowed' : 'pointer';
 
-            // Filter scores for target month
-            const monthScores = allScores.filter(score => {
+            // Filter scores for target month and head-to-head mode
+            let monthScores = allScores.filter(score => {
                 const scoreMonth = score.date.substring(0, 7); // YYYY-MM
                 return scoreMonth === targetMonth;
             });
+
+            if (headToHeadMode) {
+                monthScores = monthScores.filter(score => HEAD_TO_HEAD_PLAYERS.includes(score.username));
+            }
 
             if (monthScores.length === 0) {
                 container.innerHTML = '<p>No scores for this month</p>';
@@ -844,10 +920,8 @@
                     }
                 }
 
-                // Perfect Game - Score of 1 (Fixed: only count actual 1s, not failed scores)
+                // Perfect Game - Score of 1
                 const perfectGames = completedScores.filter(s => s.score === 1).length;
-
-                console.log(`${username}: ${perfectGames} perfect games from scores:`, completedScores.map(s => s.score));
 
                 if (perfectGames > 0) {
                     achievements.push({
@@ -1136,21 +1210,26 @@
                 return;
             }
 
-            const totalGames = allScores.length;
-            const completedGames = allScores.filter(s => !s.failed).length;
-            const failedGames = allScores.filter(s => s.failed).length;
-            const successRate = ((completedGames / totalGames) * 100).toFixed(1);
+            // Filter scores for head-to-head mode
+            const scoresToConsider = headToHeadMode ?
+                allScores.filter(score => HEAD_TO_HEAD_PLAYERS.includes(score.username)) :
+                allScores;
+
+            const totalGames = scoresToConsider.length;
+            const completedGames = scoresToConsider.filter(s => !s.failed).length;
+            const failedGames = scoresToConsider.filter(s => s.failed).length;
+            const successRate = totalGames > 0 ? ((completedGames / totalGames) * 100).toFixed(1) : '0';
 
             const avgScore = completedGames > 0
-                ? (allScores.filter(s => !s.failed).reduce((sum, s) => sum + s.score, 0) / completedGames).toFixed(2)
+                ? (scoresToConsider.filter(s => !s.failed).reduce((sum, s) => sum + s.score, 0) / completedGames).toFixed(2)
                 : 'N/A';
 
             const bestScore = completedGames > 0
-                ? Math.min(...allScores.filter(s => !s.failed).map(s => s.score))
+                ? Math.min(...scoresToConsider.filter(s => !s.failed).map(s => s.score))
                 : 'N/A';
 
-            const uniquePlayers = new Set(allScores.map(s => s.username)).size;
-            const daysPlayed = new Set(allScores.map(s => s.date)).size;
+            const uniquePlayers = new Set(scoresToConsider.map(s => s.username)).size;
+            const daysPlayed = new Set(scoresToConsider.map(s => s.date)).size;
 
             let html = `
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; font-size: 14px;">
@@ -1184,141 +1263,145 @@
             container.innerHTML = html;
         }
 
-        // Update score heatmap with larger text and more vertical space - FIXED to show multiple scores per day + Discord links
-		function updateScoreHeatmap() {
-			const container = document.getElementById('scoreHeatmap');
+        // Update score heatmap - assumes dates are already in EST timezone from database
+        function updateScoreHeatmap() {
+            const container = document.getElementById('scoreHeatmap');
 
-			if (allScores.length === 0) {
-				container.innerHTML = '<p>No data available</p>';
-				return;
-			}
+            if (allScores.length === 0) {
+                container.innerHTML = '<p>No data available</p>';
+                return;
+            }
 
-			// Group scores by user and date - FIXED to handle multiple scores per day
-			const users = [...new Set(allScores.map(s => s.username))].sort();
-			const dates = [...new Set(allScores.map(s => s.date))].sort();
+            // Filter scores for head-to-head mode
+            const scoresToConsider = headToHeadMode ?
+                allScores.filter(score => HEAD_TO_HEAD_PLAYERS.includes(score.username)) :
+                allScores;
 
-			const scoreMatrix = {};
-			users.forEach(user => {
-				scoreMatrix[user] = {};
-				dates.forEach(date => {
-					// Get ALL scores for this user on this date, not just the first one
-					const userScoresForDate = allScores.filter(s => s.username === user && s.date === date);
+            // Group scores by user and date (already EST from database)
+            const users = [...new Set(scoresToConsider.map(s => s.username))].sort();
+            const dates = [...new Set(scoresToConsider.map(s => s.date))].sort().reverse();
 
-					if (userScoresForDate.length > 0) {
-						// If multiple scores on same day, show the best one (lowest number)
-						const bestScore = userScoresForDate.reduce((best, current) => {
-							if (current.failed && !best.failed) return best;
-							if (!current.failed && best.failed) return current;
-							if (current.failed && best.failed) return best; // Both failed, keep first
-							return current.score < best.score ? current : best;
-						});
-						scoreMatrix[user][date] = bestScore;
-					} else {
-						scoreMatrix[user][date] = null;
-					}
-				});
-			});
+            const scoreMatrix = {};
+            users.forEach(user => {
+                scoreMatrix[user] = {};
+                dates.forEach(date => {
+                    // Get ALL scores for this user on this date
+                    const userScoresForDate = scoresToConsider.filter(s => s.username === user && s.date === date);
 
-			// Create heatmap HTML with larger text and more vertical space
-			let html = `
-				<div style="display: flex; font-size: 16px; font-family: monospace;">
-					<div style="width: 150px; flex-shrink: 0;">
-						<div style="height: 40px;"></div>
-			`;
+                    if (userScoresForDate.length > 0) {
+                        // If multiple scores on same day, show the best one (lowest number)
+                        const bestScore = userScoresForDate.reduce((best, current) => {
+                            if (current.failed && !best.failed) return best;
+                            if (!current.failed && best.failed) return current;
+                            if (current.failed && best.failed) return best;
+                            return current.score < best.score ? current : best;
+                        });
+                        scoreMatrix[user][date] = bestScore;
+                    } else {
+                        scoreMatrix[user][date] = null;
+                    }
+                });
+            });
 
-			users.forEach(user => {
-				html += `<div style="height: 45px; line-height: 45px; padding-right: 15px; text-align: right; font-weight: bold; font-size: 14px;">${user}</div>`;
-			});
+            // Create heatmap HTML
+            let html = `
+                <div style="display: flex; font-size: 16px; font-family: monospace;">
+                    <div style="width: 150px; flex-shrink: 0;">
+                        <div style="height: 40px;"></div>
+            `;
 
-			html += '</div><div style="overflow-x: auto; flex-grow: 1;"><div style="display: flex;">';
+            users.forEach(user => {
+                html += `<div style="height: 45px; line-height: 45px; padding-right: 15px; text-align: right; font-weight: bold; font-size: 14px;">${user}</div>`;
+            });
 
-			dates.forEach(date => {
-				const shortDate = date.slice(5); // MM-DD format
-				html += `
-					<div style="width: 40px; margin-right: 3px;">
-						<div style="height: 40px; line-height: 40px; text-align: center; font-size: 12px; transform: rotate(-45deg); transform-origin: center;">${shortDate}</div>
-				`;
+            html += '</div><div style="overflow-x: auto; flex-grow: 1;"><div style="display: flex;">';
 
-				users.forEach(user => {
-					const score = scoreMatrix[user][date];
-					let bgColor = '#f0f0f0';
-					let textColor = '#999';
-					let displayText = '—';
-					let cellContent = '';
+            dates.forEach(date => {
+                const shortDate = date.slice(5); // MM-DD format
+                html += `
+                    <div style="width: 40px; margin-right: 3px;">
+                        <div style="height: 40px; line-height: 40px; text-align: center; font-size: 12px; transform: rotate(-45deg); transform-origin: center;">${shortDate}</div>
+                `;
 
-					if (score) {
-						if (score.failed) {
-							bgColor = '#2c3e50';
-							textColor = 'white';
-							displayText = 'X';
-						} else {
-							// Color gradient from green (1) to red (6)
-							const colors = ['#27ae60', '#2ecc71', '#f39c12', '#e67e22', '#e74c3c', '#c0392b'];
-							bgColor = colors[score.score - 1];
-							textColor = 'white';
-							displayText = score.score;
-						}
+                users.forEach(user => {
+                    const score = scoreMatrix[user][date];
+                    let bgColor = '#f0f0f0';
+                    let textColor = '#999';
+                    let displayText = '—';
+                    let cellContent = '';
 
-						// Create Discord link if message_id exists
-						if (score.message_id) {
-							const discordLink = `https://discord.com/channels/577258915402612757/1381727975548125346/${score.message_id}`;
-							cellContent = `<a href="${discordLink}" target="_blank" style="color: ${textColor}; text-decoration: none; display: block; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">${displayText}</a>`;
-						} else {
-							cellContent = displayText;
-						}
-					} else {
-						cellContent = displayText;
-					}
+                    if (score) {
+                        if (score.failed) {
+                            bgColor = '#2c3e50';
+                            textColor = 'white';
+                            displayText = 'X';
+                        } else {
+                            const colors = ['#27ae60', '#2ecc71', '#f39c12', '#e67e22', '#e74c3c', '#c0392b'];
+                            bgColor = colors[score.score - 1];
+                            textColor = 'white';
+                            displayText = score.score;
+                        }
 
-					const tooltipText = score ? 
-						(score.failed ? 'Failed' : `Score ${score.score}`) + 
-						(score.message_id ? ' (Click to view Discord message)' : '') : 
-						'No score';
+                        // Create Discord link if message_id exists
+                        if (score.message_id) {
+                            const discordLink = `https://discord.com/channels/577258915402612757/1381727975548125346/${score.message_id}`;
+                            cellContent = `<a href="${discordLink}" target="_blank" style="color: ${textColor}; text-decoration: none; display: block; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">${displayText}</a>`;
+                        } else {
+                            cellContent = displayText;
+                        }
+                    } else {
+                        cellContent = displayText;
+                    }
 
-					html += `
-						<div style="
-							width: 37px;
-							height: 45px;
-							background-color: ${bgColor};
-							color: ${textColor};
-							display: flex;
-							align-items: center;
-							justify-content: center;
-							font-weight: bold;
-							font-size: 16px;
-							border: 1px solid #ddd;
-							${score && score.message_id ? 'cursor: pointer;' : ''}
-						" title="${user} on ${date}: ${tooltipText}">${cellContent}</div>
-					`;
-				});
+                    const tooltipText = score ?
+                        (score.failed ? 'Failed' : `Score ${score.score}`) +
+                        (score.message_id ? ' (Click to view Discord message)' : '') :
+                        'No score';
 
-				html += '</div>';
-			});
+                    html += `
+                        <div style="
+                            width: 37px;
+                            height: 45px;
+                            background-color: ${bgColor};
+                            color: ${textColor};
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-weight: bold;
+                            font-size: 16px;
+                            border: 1px solid #ddd;
+                            ${score && score.message_id ? 'cursor: pointer;' : ''}
+                        " title="${user} on ${date}: ${tooltipText}">${cellContent}</div>
+                    `;
+                });
 
-			html += '</div></div></div>';
+                html += '</div>';
+            });
 
-			// Add legend with larger text
-			html += `
-				<div style="margin-top: 25px; display: flex; align-items: center; gap: 20px; font-size: 16px;">
-					<span style="font-weight: bold;">Legend:</span>
-					<div style="display: flex; gap: 8px;">
-						<div style="width: 30px; height: 30px; background: #27ae60; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px;">1</div>
-						<div style="width: 30px; height: 30px; background: #2ecc71; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px;">2</div>
-						<div style="width: 30px; height: 30px; background: #f39c12; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px;">3</div>
-						<div style="width: 30px; height: 30px; background: #e67e22; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px;">4</div>
-						<div style="width: 30px; height: 30px; background: #e74c3c; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px;">5</div>
-						<div style="width: 30px; height: 30px; background: #c0392b; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px;">6</div>
-						<div style="width: 30px; height: 30px; background: #2c3e50; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px;">X</div>
-						<div style="width: 30px; height: 30px; background: #f0f0f0; color: #999; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px;">—</div>
-					</div>
-					<span style="margin-left: 15px; color: #666; font-size: 14px;">Green = Better, Red = Worse, X = Failed, — = No Score</span>
-					<span style="margin-left: 15px; color: #666; font-size: 12px; font-style: italic;">*Shows best score when multiple games played same day</span>
-					<span style="margin-left: 15px; color: #667eea; font-size: 12px; font-weight: bold;">Click scores to view Discord messages</span>
-				</div>
-			`;
+            html += '</div></div></div>';
 
-			container.innerHTML = html;
-		}
+            // Add legend
+            html += `
+                <div style="margin-top: 25px; display: flex; align-items: center; gap: 20px; font-size: 16px;">
+                    <span style="font-weight: bold;">Legend:</span>
+                    <div style="display: flex; gap: 8px;">
+                        <div style="width: 30px; height: 30px; background: #27ae60; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px;">1</div>
+                        <div style="width: 30px; height: 30px; background: #2ecc71; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px;">2</div>
+                        <div style="width: 30px; height: 30px; background: #f39c12; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px;">3</div>
+                        <div style="width: 30px; height: 30px; background: #e67e22; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px;">4</div>
+                        <div style="width: 30px; height: 30px; background: #e74c3c; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px;">5</div>
+                        <div style="width: 30px; height: 30px; background: #c0392b; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px;">6</div>
+                        <div style="width: 30px; height: 30px; background: #2c3e50; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px;">X</div>
+                        <div style="width: 30px; height: 30px; background: #f0f0f0; color: #999; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px;">—</div>
+                    </div>
+                    <span style="margin-left: 15px; color: #666; font-size: 14px;">Green = Better, Red = Worse, X = Failed, — = No Score</span>
+                    <span style="margin-left: 15px; color: #666; font-size: 12px; font-style: italic;">*Shows best score when multiple games played same day</span>
+                    <span style="margin-left: 15px; color: #667eea; font-size: 12px; font-weight: bold;">Click scores to view Discord messages</span>
+                </div>
+            `;
+
+            container.innerHTML = html;
+        }
 
         // Get performance badge based on average score
         function getPerformanceBadge(avgScore) {
@@ -1332,9 +1415,19 @@
         function updateTrendsChart() {
             const ctx = document.getElementById('trendsChart').getContext('2d');
 
+            // Destroy existing chart if it exists
+            if (trendsChart) {
+                trendsChart.destroy();
+            }
+
+            // Filter scores for head-to-head mode
+            const scoresToConsider = headToHeadMode ?
+                allScores.filter(score => HEAD_TO_HEAD_PLAYERS.includes(score.username)) :
+                allScores;
+
             // Group scores by user and date
             const userProgress = {};
-            allScores.forEach(score => {
+            scoresToConsider.forEach(score => {
                 if (!userProgress[score.username]) {
                     userProgress[score.username] = {};
                 }
@@ -1342,7 +1435,7 @@
             });
 
             // Get unique dates and sort them
-            const dates = [...new Set(allScores.map(s => s.date))].sort();
+            const dates = [...new Set(scoresToConsider.map(s => s.date))].sort().reverse();
 
             // Create datasets for each user with unique colors
             const colors = [
@@ -1364,7 +1457,7 @@
                 };
             });
 
-            const trendsChart = new Chart(ctx, {
+            trendsChart = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: dates,
@@ -1392,7 +1485,7 @@
                     plugins: {
                         title: {
                             display: true,
-                            text: 'Score Trends Over Time'
+                            text: headToHeadMode ? 'Score Trends: .cyco vs clicky6792' : 'Score Trends Over Time'
                         },
                         legend: {
                             onClick: (e, legendItem, legend) => {
@@ -1412,19 +1505,29 @@
         function updateDistributionChart() {
             const ctx = document.getElementById('distributionChart').getContext('2d');
 
+            // Destroy existing chart if it exists
+            if (distributionChart) {
+                distributionChart.destroy();
+            }
+
+            // Filter scores for head-to-head mode
+            const scoresToConsider = headToHeadMode ?
+                allScores.filter(score => HEAD_TO_HEAD_PLAYERS.includes(score.username)) :
+                allScores;
+
             // Count score frequencies
             const scoreCounts = {};
             for (let i = 1; i <= 6; i++) {
                 scoreCounts[i] = 0;
             }
 
-            allScores.forEach(score => {
+            scoresToConsider.forEach(score => {
                 if (!score.failed) {
                     scoreCounts[score.score]++;
                 }
             });
 
-            new Chart(ctx, {
+            distributionChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
                     labels: ['1', '2', '3', '4', '5', '6'],
@@ -1462,7 +1565,7 @@
                     plugins: {
                         title: {
                             display: true,
-                            text: 'Score Distribution'
+                            text: headToHeadMode ? 'Score Distribution: .cyco vs clicky6792' : 'Score Distribution'
                         }
                     }
                 }
@@ -1473,9 +1576,47 @@
         function updateDailyChart() {
             const ctx = document.getElementById('dailyChart').getContext('2d');
 
-            const sortedDaily = dailyStats.sort((a, b) => new Date(a.date) - new Date(b.date));
+            // Destroy existing chart if it exists
+            if (dailyChart) {
+                dailyChart.destroy();
+            }
 
-            new Chart(ctx, {
+            // Filter daily stats for head-to-head mode if needed
+            let dailyStatsToUse = dailyStats;
+            if (headToHeadMode) {
+                // Recalculate daily stats for just the head-to-head players
+                const h2hScores = allScores.filter(score => HEAD_TO_HEAD_PLAYERS.includes(score.username));
+                const dailyData = {};
+
+                h2hScores.forEach(score => {
+                    if (!dailyData[score.date]) {
+                        dailyData[score.date] = { scores: [], failed: 0 };
+                    }
+                    if (score.failed) {
+                        dailyData[score.date].failed++;
+                    } else {
+                        dailyData[score.date].scores.push(score.score);
+                    }
+                });
+
+                dailyStatsToUse = Object.keys(dailyData).map(date => {
+                    const dayData = dailyData[date];
+                    const scores = dayData.scores;
+                    return {
+                        date: date,
+                        players: scores.length + dayData.failed,
+                        avg_score: scores.length > 0 ? (scores.reduce((sum, s) => sum + s, 0) / scores.length).toFixed(2) : null,
+                        best_score: scores.length > 0 ? Math.min(...scores) : null,
+                        worst_score: scores.length > 0 ? Math.max(...scores) : null,
+                        failed_count: dayData.failed
+                    };
+                }).filter(d => d.avg_score !== null);
+            }
+
+            //const sortedDaily = dailyStatsToUse.sort((a, b) => new Date(a.date) - new Date(b.date));
+            const sortedDaily = dailyStatsToUse.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            dailyChart = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: sortedDaily.map(d => d.date),
@@ -1490,6 +1631,12 @@
                         data: sortedDaily.map(d => d.best_score),
                         borderColor: '#48bb78',
                         backgroundColor: '#48bb7820',
+                        tension: 0.1
+                    }, {
+                        label: 'Worst Score',
+                        data: sortedDaily.map(d => d.worst_score),
+                        borderColor: '#e74c3c',
+                        backgroundColor: '#e74c3c20',
                         tension: 0.1
                     }]
                 },
@@ -1509,7 +1656,7 @@
                     plugins: {
                         title: {
                             display: true,
-                            text: 'Daily Performance'
+                            text: headToHeadMode ? 'Daily Performance: .cyco vs clicky6792' : 'Daily Performance'
                         }
                     }
                 }
@@ -1520,15 +1667,25 @@
         function updateProgressChart() {
             const ctx = document.getElementById('progressChart').getContext('2d');
 
+            // Destroy existing chart if it exists
+            if (progressChart) {
+                progressChart.destroy();
+            }
+
+            // Filter scores for head-to-head mode
+            const scoresToConsider = headToHeadMode ?
+                allScores.filter(score => HEAD_TO_HEAD_PLAYERS.includes(score.username)) :
+                allScores;
+
             // Calculate 7-day moving average for each user with unique colors
-            const users = [...new Set(allScores.map(s => s.username))];
+            const users = [...new Set(scoresToConsider.map(s => s.username))];
             const colors = [
                 '#e74c3c', '#3498db', '#f39c12', '#2ecc71', '#9b59b6',
                 '#e67e22', '#1abc9c', '#34495e', '#f1c40f', '#8e44ad',
                 '#d35400', '#27ae60', '#2980b9', '#c0392b', '#16a085'
             ];
             const datasets = users.map((username, index) => {
-                const userScores = allScores.filter(s => s.username === username && !s.failed)
+                const userScores = scoresToConsider.filter(s => s.username === username && !s.failed)
                     .sort((a, b) => new Date(a.date) - new Date(b.date));
 
                 const movingAvg = [];
@@ -1549,7 +1706,7 @@
                 };
             });
 
-            const progressChart = new Chart(ctx, {
+            progressChart = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: Array.from({length: Math.max(...datasets.map(d => d.data.length))}, (_, i) => i + 1),
@@ -1577,7 +1734,7 @@
                     plugins: {
                         title: {
                             display: true,
-                            text: '7-Game Moving Average'
+                            text: headToHeadMode ? '7-Game Moving Average: .cyco vs clicky6792' : '7-Game Moving Average'
                         },
                         legend: {
                             onClick: (e, legendItem, legend) => {
@@ -1653,8 +1810,13 @@
                 return;
             }
 
+            // Filter scores for head-to-head mode if active
+            const scoresToExport = headToHeadMode ?
+                allScores.filter(score => HEAD_TO_HEAD_PLAYERS.includes(score.username)) :
+                allScores;
+
             // Sort by message_date (or created_at as fallback) descending
-            const sortedScores = [...allScores].sort((a, b) => {
+            const sortedScores = [...scoresToExport].sort((a, b) => {
                 const dateA = new Date(a.message_date || a.created_at);
                 const dateB = new Date(b.message_date || b.created_at);
                 return dateB - dateA; // Most recent first
@@ -1673,11 +1835,15 @@
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `costcodle_scores_${new Date().toISOString().split('T')[0]}.csv`;
+            const filename = headToHeadMode ?
+                `costcodle_head_to_head_${new Date().toISOString().split('T')[0]}.csv` :
+                `costcodle_scores_${new Date().toISOString().split('T')[0]}.csv`;
+            a.download = filename;
             a.click();
             window.URL.revokeObjectURL(url);
 
-            showMessage(`Exported ${sortedScores.length} scores to CSV (sorted by message date)`, 'success');
+            const modeText = headToHeadMode ? ' (Head-to-Head)' : '';
+            showMessage(`Exported ${sortedScores.length} scores to CSV${modeText}`, 'success');
         }
 
         // Initialize the dashboard
