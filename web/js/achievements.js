@@ -1,5 +1,5 @@
 // web/js/achievements.js
-import { state } from './state.js';
+import { state, filterDataForHeadToHead, HEAD_TO_HEAD_PLAYERS } from './state.js';
 
 // Get achievement icons for a user
 function getAchievementIcons(username) {
@@ -330,14 +330,17 @@ export function updateAchievementsWidget(specificUser = null) {
         return;
     }
 
-    // Filter to specific user if requested
+    // Filter to specific user if requested, or apply head-to-head filter
     let usersToShow;
     if (specificUser) {
         usersToShow = [[specificUser, state.userAchievements[specificUser] || []]];
     } else {
-        // Sort users by number of achievements
+        // Apply head-to-head filter if active
         usersToShow = Object.entries(state.userAchievements)
-            .filter(([username, achievements]) => achievements.length > 0)
+            .filter(([username, achievements]) => {
+                if (!state.headToHeadMode) return achievements.length > 0;
+                return HEAD_TO_HEAD_PLAYERS.includes(username) && achievements.length > 0;
+            })
             .sort((a, b) => b[1].length - a[1].length);
     }
 

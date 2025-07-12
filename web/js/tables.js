@@ -1,5 +1,5 @@
 // web/js/tables.js
-import { state } from './state.js';
+import { state, filterDataForHeadToHead } from './state.js';
 
 // Get performance badge based on average score
 function getPerformanceBadge(avgScore) {
@@ -11,8 +11,11 @@ function getPerformanceBadge(avgScore) {
 
 // Calculate daily wins for a user
 function calculateDailyWins(username) {
+    // Filter scores for head-to-head mode
+    const scoresToConsider = filterDataForHeadToHead(state.allScores);
+    
     const dailyScores = {};
-    state.allScores.forEach(score => {
+    scoresToConsider.forEach(score => {
         if (!dailyScores[score.date]) {
             dailyScores[score.date] = [];
         }
@@ -39,22 +42,70 @@ function calculateDailyWins(username) {
     return wins.toFixed(1);
 }
 
-// Calculate streak data for a user
+// Calculate consecutive days streak - updated to match monolithic version
 function calculateStreaks(userScores) {
-    const sortedScores = userScores.sort((a, b) => new Date(a.date) - new Date(b.date));
+    // Get unique dates for this user and sort them
+    const uniqueDates = [...new Set(userScores.map(s => s.date))].sort();
 
     let currentStreak = 0;
     let maxStreak = 0;
+    let tempStreak = 1;
 
-    sortedScores.forEach(score => {
-        // Good streak (score <= 3 and not failed)
-        if (!score.failed && score.score <= 3) {
-            currentStreak++;
-            maxStreak = Math.max(maxStreak, currentStreak);
+    if (uniqueDates.length === 0) {
+        return { currentStreak: 0, maxStreak: 0 };
+    }
+
+    if (uniqueDates.length === 1) {
+        return { currentStreak: 1, maxStreak: 1 };
+    }
+
+    // Calculate longest streak first
+    for (let i = 1; i < uniqueDates.length; i++) {
+        const prevDate = new Date(uniqueDates[i-1]);
+        const currDate = new Date(uniqueDates[i]);
+        const dayDiff = (currDate - prevDate) / (1000 * 60 * 60 * 24);
+
+        if (dayDiff === 1) {
+            tempStreak++;
+            maxStreak = Math.max(maxStreak, tempStreak);
         } else {
-            currentStreak = 0;
+            tempStreak = 1;
         }
-    });
+    }
+
+    // If no consecutive days found, max streak is 1 (assuming they played at least once)
+    if (maxStreak === 0) {
+        maxStreak = 1;
+    }
+
+    // Calculate current streak from the most recent date backwards
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+    const mostRecentDate = uniqueDates[uniqueDates.length - 1];
+
+    // If they played today or yesterday, start counting current streak
+    if (mostRecentDate === todayStr || mostRecentDate === yesterdayStr) {
+        currentStreak = 1;
+
+        // Count backwards from most recent date
+        for (let i = uniqueDates.length - 2; i >= 0; i--) {
+            const currDate = new Date(uniqueDates[i + 1]);
+            const prevDate = new Date(uniqueDates[i]);
+            const dayDiff = (currDate - prevDate) / (1000 * 60 * 60 * 24);
+
+            if (dayDiff === 1) {
+                currentStreak++;
+            } else {
+                break;
+            }
+        }
+    } else {
+        currentStreak = 0; // Streak is broken if they haven't played recently
+    }
 
     return { currentStreak, maxStreak };
 }
@@ -68,8 +119,16 @@ export function updateUserStatsTable() {
         return;
     }
 
+    // Filter user stats for head-to-head mode
+    const filteredUserStats = filterDataForHeadToHead(state.userStats);
+
+    if (filteredUserStats.length === 0) {
+        container.innerHTML = '<p>No data available for selected players</p>';
+        return;
+    }
+
     // Calculate additional stats for each user
-    const enhancedStats = state.userStats.map(user => {
+    const enhancedStats = filteredUserStats.map(user => {
         const userScores = state.allScores.filter(s => s.username === user.username);
 
         // Sort by date for streak and date calculations
@@ -84,7 +143,7 @@ export function updateUserStatsTable() {
         // Calculate daily wins
         const dailyWins = calculateDailyWins(user.username);
 
-        // Calculate streaks
+        // Calculate consecutive day streaks (updated function)
         const streakData = calculateStreaks(userScores);
 
         return {
@@ -139,7 +198,18 @@ export function updateUserStatsTable() {
         `;
     });
 
-    html += '</tbody></table>';
+    html += `
+            </tbody>
+        </table>
+        <div style="margin-top: 15px; font-size: 12px; color: #666; text-align: center;">
+            <strong>Performance Thresholds:</strong>
+            <span style="color: #48bb78;">Excellent</span> ≤ 2.99 •
+            <span style="color: #4299e1;">Good</span> 3.00-3.49 •
+            <span style="color: #ed8936;">Average</span> 3.50-3.99 •
+            <span style="color: #f56565;">BJ's Member</span> ≥ 4.00
+        </div>
+    `;
+    
     container.innerHTML = html;
 }
 
@@ -168,10 +238,13 @@ export function updateMonthlyLeaderboard() {
     nextBtn.style.cursor = state.currentMonthOffset >= 0 ? 'not-allowed' : 'pointer';
 
     // Filter scores for target month
-    const monthScores = state.allScores.filter(score => {
+    let monthScores = state.allScores.filter(score => {
         const scoreMonth = score.date.substring(0, 7); // YYYY-MM
         return scoreMonth === targetMonth;
     });
+
+    // Apply head-to-head filtering
+    monthScores = filterDataForHeadToHead(monthScores);
 
     if (monthScores.length === 0) {
         container.innerHTML = '<p>No scores for this month</p>';
@@ -268,21 +341,24 @@ export function updatePerformanceSummary() {
         return;
     }
 
-    const totalGames = state.allScores.length;
-    const completedGames = state.allScores.filter(s => !s.failed).length;
-    const failedGames = state.allScores.filter(s => s.failed).length;
-    const successRate = ((completedGames / totalGames) * 100).toFixed(1);
+    // Filter scores for head-to-head mode
+    const scoresToConsider = filterDataForHeadToHead(state.allScores);
+
+    const totalGames = scoresToConsider.length;
+    const completedGames = scoresToConsider.filter(s => !s.failed).length;
+    const failedGames = scoresToConsider.filter(s => s.failed).length;
+    const successRate = totalGames > 0 ? ((completedGames / totalGames) * 100).toFixed(1) : '0';
 
     const avgScore = completedGames > 0
-        ? (state.allScores.filter(s => !s.failed).reduce((sum, s) => sum + s.score, 0) / completedGames).toFixed(2)
+        ? (scoresToConsider.filter(s => !s.failed).reduce((sum, s) => sum + s.score, 0) / completedGames).toFixed(2)
         : 'N/A';
 
     const bestScore = completedGames > 0
-        ? Math.min(...state.allScores.filter(s => !s.failed).map(s => s.score))
+        ? Math.min(...scoresToConsider.filter(s => !s.failed).map(s => s.score))
         : 'N/A';
 
-    const uniquePlayers = new Set(state.allScores.map(s => s.username)).size;
-    const daysPlayed = new Set(state.allScores.map(s => s.date)).size;
+    const uniquePlayers = new Set(scoresToConsider.map(s => s.username)).size;
+    const daysPlayed = new Set(scoresToConsider.map(s => s.date)).size;
 
     let html = `
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; font-size: 14px;">
@@ -316,7 +392,7 @@ export function updatePerformanceSummary() {
     container.innerHTML = html;
 }
 
-// Update score heatmap with larger text and more vertical space - FIXED to show multiple scores per day + Discord links
+// Update score heatmap - assumes dates are already in EST timezone from database
 export function updateScoreHeatmap() {
     const container = document.getElementById('scoreHeatmap');
 
@@ -325,23 +401,26 @@ export function updateScoreHeatmap() {
         return;
     }
 
-    // Group scores by user and date - FIXED to handle multiple scores per day
-    const users = [...new Set(state.allScores.map(s => s.username))].sort();
-    const dates = [...new Set(state.allScores.map(s => s.date))].sort();
+    // Filter scores for head-to-head mode
+    const scoresToConsider = filterDataForHeadToHead(state.allScores);
+
+    // Group scores by user and date (already EST from database)
+    const users = [...new Set(scoresToConsider.map(s => s.username))].sort();
+    const dates = [...new Set(scoresToConsider.map(s => s.date))].sort().reverse();
 
     const scoreMatrix = {};
     users.forEach(user => {
         scoreMatrix[user] = {};
         dates.forEach(date => {
-            // Get ALL scores for this user on this date, not just the first one
-            const userScoresForDate = state.allScores.filter(s => s.username === user && s.date === date);
+            // Get ALL scores for this user on this date
+            const userScoresForDate = scoresToConsider.filter(s => s.username === user && s.date === date);
 
             if (userScoresForDate.length > 0) {
                 // If multiple scores on same day, show the best one (lowest number)
                 const bestScore = userScoresForDate.reduce((best, current) => {
                     if (current.failed && !best.failed) return best;
                     if (!current.failed && best.failed) return current;
-                    if (current.failed && best.failed) return best; // Both failed, keep first
+                    if (current.failed && best.failed) return best;
                     return current.score < best.score ? current : best;
                 });
                 scoreMatrix[user][date] = bestScore;
@@ -351,7 +430,7 @@ export function updateScoreHeatmap() {
         });
     });
 
-    // Create heatmap HTML with larger text and more vertical space
+    // Create heatmap HTML
     let html = `
         <div style="display: flex; font-size: 16px; font-family: monospace;">
             <div style="width: 150px; flex-shrink: 0;">
@@ -384,7 +463,6 @@ export function updateScoreHeatmap() {
                     textColor = 'white';
                     displayText = 'X';
                 } else {
-                    // Color gradient from green (1) to red (6)
                     const colors = ['#27ae60', '#2ecc71', '#f39c12', '#e67e22', '#e74c3c', '#c0392b'];
                     bgColor = colors[score.score - 1];
                     textColor = 'white';
@@ -402,9 +480,9 @@ export function updateScoreHeatmap() {
                 cellContent = displayText;
             }
 
-            const tooltipText = score ? 
-                (score.failed ? 'Failed' : `Score ${score.score}`) + 
-                (score.message_id ? ' (Click to view Discord message)' : '') : 
+            const tooltipText = score ?
+                (score.failed ? 'Failed' : `Score ${score.score}`) +
+                (score.message_id ? ' (Click to view Discord message)' : '') :
                 'No score';
 
             html += `
@@ -429,7 +507,7 @@ export function updateScoreHeatmap() {
 
     html += '</div></div></div>';
 
-    // Add legend with larger text
+    // Add legend
     html += `
         <div style="margin-top: 25px; display: flex; align-items: center; gap: 20px; font-size: 16px;">
             <span style="font-weight: bold;">Legend:</span>

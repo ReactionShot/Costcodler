@@ -61,6 +61,19 @@ body {
     background: #5a6fd8;
 }
 
+.controls button.head-to-head {
+    background: #e74c3c;
+}
+
+.controls button.head-to-head:hover {
+    background: #c0392b;
+}
+
+.controls button.head-to-head.active {
+    background: #c0392b;
+    box-shadow: 0 0 10px rgba(231, 76, 60, 0.3);
+}
+
 .grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);

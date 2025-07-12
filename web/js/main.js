@@ -20,6 +20,34 @@ import {
 } from './achievements.js';
 import { state } from './state.js';
 
+// Toggle head-to-head mode
+function toggleHeadToHead() {
+    state.headToHeadMode = !state.headToHeadMode;
+    const btn = document.getElementById('headToHeadBtn');
+
+    if (state.headToHeadMode) {
+        btn.textContent = 'Show All Players';
+        btn.classList.add('active');
+        showMessage('Head-to-Head mode: Showing only .cyco vs clicky6792', 'info');
+    } else {
+        btn.textContent = '⚔️ Head to Head';
+        btn.classList.remove('active');
+        showMessage('Showing all players', 'info');
+    }
+
+    // Refresh all widgets with new filter
+    updateUserStatsTable();
+    updateTrendsChart();
+    updateDistributionChart();
+    updateDailyChart();
+    updateProgressChart();
+    updateScoreHeatmap();
+    updatePerformanceSummary();
+    updateAchievements();
+    updateAchievementsWidget();
+    updateMonthlyLeaderboard();
+}
+
 // Initialize the dashboard
 async function init() {
     try {
@@ -57,6 +85,9 @@ function setupEventHandlers() {
     
     // Export button
     document.getElementById('exportBtn').addEventListener('click', exportData);
+    
+    // Head-to-head button
+    document.getElementById('headToHeadBtn').addEventListener('click', toggleHeadToHead);
     
     // Toggle achievements button
     document.getElementById('toggleAchievementsBtn').addEventListener('click', toggleAllAchievements);

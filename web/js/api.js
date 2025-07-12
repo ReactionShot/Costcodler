@@ -1,5 +1,5 @@
 // web/js/api.js
-import { state, API_BASE } from './state.js';
+import { state, API_BASE, filterDataForHeadToHead } from './state.js';
 
 // Show message to user
 export function showMessage(text, type) {
@@ -76,8 +76,11 @@ export function exportData() {
         return;
     }
 
+    // Filter scores for head-to-head mode if active
+    const scoresToExport = filterDataForHeadToHead(state.allScores);
+
     // Sort by message_date (or created_at as fallback) descending
-    const sortedScores = [...state.allScores].sort((a, b) => {
+    const sortedScores = [...scoresToExport].sort((a, b) => {
         const dateA = new Date(a.message_date || a.created_at);
         const dateB = new Date(b.message_date || b.created_at);
         return dateB - dateA; // Most recent first
@@ -96,9 +99,15 @@ export function exportData() {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `costcodle_scores_${new Date().toISOString().split('T')[0]}.csv`;
+    
+    // Update filename based on head-to-head mode
+    const filename = state.headToHeadMode ?
+        `costcodle_head_to_head_${new Date().toISOString().split('T')[0]}.csv` :
+        `costcodle_scores_${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = filename;
     a.click();
     window.URL.revokeObjectURL(url);
 
-    showMessage(`Exported ${sortedScores.length} scores to CSV (sorted by message date)`, 'success');
+    const modeText = state.headToHeadMode ? ' (Head-to-Head)' : '';
+    showMessage(`Exported ${sortedScores.length} scores to CSV${modeText}`, 'success');
 } 

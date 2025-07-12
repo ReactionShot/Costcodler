@@ -1,0 +1,180 @@
+version: '3'
+
+vars:
+  APP_NAME: costcodle-tracker
+  NODE_VERSION: 18
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmd: task --list
+
+  # Development tasks
+  dev:
+    desc: Start development server with Discord bot
+    cmd: npm run dev
+    
+  dev:no-discord:
+    desc: Start development server without Discord bot (uses mock data)
+    cmd: npm run dev:no-discord
+
+  dev:watch:
+    desc: Start development server with file watching
+    cmd: nodemon bot/server.js
+    
+  # Frontend development
+  web:serve:
+    desc: Serve the web directory for frontend-only development
+    cmd: npx http-server web -p 8080 -o
+    
+  web:test:
+    desc: Test frontend modules (syntax check)
+    cmd: |
+      echo "Checking JavaScript syntax..."
+      node -c web/js/state.js
+      node -c web/js/api.js
+      node -c web/js/main.js
+      node -c web/js/tables.js
+      node -c web/js/charts.js
+      node -c web/js/achievements.js
+      echo "✅ All frontend modules are valid"
+
+  # Database tasks
+  db:reset:
+    desc: Reset the database (delete and recreate)
+    cmd: |
+      rm -f costcodle_scores.db
+      echo "Database reset. It will be recreated on next server start."
+      
+  db:backup:
+    desc: Backup the database
+    cmd: |
+      cp costcodle_scores.db "costcodle_scores_backup_$(date +%Y%m%d_%H%M%S).db"
+      echo "Database backed up"
+      
+  db:inspect:
+    desc: Open SQLite CLI to inspect database
+    cmd: sqlite3 costcodle_scores.db
+
+  # Docker tasks
+  docker:dev:
+    desc: Run development environment with Docker
+    cmd: docker compose -f compose.dev.yml up --build
+    
+  docker:dev:down:
+    desc: Stop development Docker environment
+    cmd: docker compose -f compose.dev.yml down
+    
+  docker:prod:
+    desc: Run production environment with Docker
+    cmd: docker compose up -d
+    
+  docker:prod:down:
+    desc: Stop production Docker environment
+    cmd: docker compose down
+    
+  docker:logs:
+    desc: View Docker container logs
+    cmd: docker compose logs -f {{.APP_NAME}}
+    
+  docker:rebuild:
+    desc: Rebuild and restart Docker containers
+    cmd: |
+      docker compose down
+      docker compose build --no-cache
+      docker compose up -d
+
+  # Maintenance tasks
+  install:
+    desc: Install dependencies
+    cmd: npm install
+    
+  clean:
+    desc: Clean up generated files and caches
+    cmd: |
+      rm -rf node_modules/.cache
+      rm -f *.log
+      rm -f costcodle_scores_backup_*.db
+      echo "Cleanup complete"
+      
+  lint:
+    desc: Check code style (basic checks)
+    cmd: |
+      echo "Checking for basic linting issues..."
+      # Check for console.log statements (except in development)
+      grep -r "console\.log" bot/ web/js/ || echo "✅ No console.log found"
+      # Check for TODO/FIXME comments
+      grep -r "TODO\|FIXME" bot/ web/js/ || echo "✅ No TODOs found"
+      echo "Basic lint check complete"
+
+  # Testing tasks
+  test:api:
+    desc: Test API endpoints (requires server to be running)
+    cmd: |
+      echo "Testing API endpoints..."
+      curl -s http://localhost:3000/api/users | jq '.' > /dev/null && echo "✅ /api/users OK" || echo "❌ /api/users failed"
+      curl -s http://localhost:3000/api/scores | jq '.' > /dev/null && echo "✅ /api/scores OK" || echo "❌ /api/scores failed"
+      curl -s http://localhost:3000/api/daily-stats | jq '.' > /dev/null && echo "✅ /api/daily-stats OK" || echo "❌ /api/daily-stats failed"
+    requires:
+      vars: [SERVER_RUNNING]
+    preconditions:
+      - sh: command -v curl
+        msg: "curl is required for API testing"
+      - sh: command -v jq
+        msg: "jq is required for JSON parsing"
+
+  # Production tasks
+  prod:deploy:
+    desc: Deploy to production (assumes Docker environment)
+    cmd: |
+      echo "Deploying to production..."
+      git pull
+      docker compose build
+      docker compose up -d
+      echo "Deployment complete"
+
+  prod:backup:
+    desc: Backup production data
+    cmd: |
+      docker compose exec {{.APP_NAME}} cp /data/costcodle_scores.db /data/backup_$(date +%Y%m%d_%H%M%S).db
+      echo "Production backup complete"
+
+  # Development utilities
+  generate:mock:
+    desc: Generate fresh mock data for development
+    cmd: |
+      echo "Starting server to generate fresh mock data..."
+      NODE_ENV=development node -e "
+        console.log('Mock data will be generated when server starts without Discord token');
+        console.log('Run: npm run dev:no-discord');
+      "
+
+  check:env:
+    desc: Check environment configuration
+    cmd: |
+      echo "Environment Check:"
+      echo "==================="
+      node --version | sed 's/^/Node.js: /'
+      npm --version | sed 's/^/npm: /'
+      echo -n "Discord Token: "
+      if [ -n "$DISCORD_TOKEN" ]; then echo "✅ Set"; else echo "❌ Not set (will use mock data)"; fi
+      echo -n "Database: "
+      if [ -f "costcodle_scores.db" ]; then echo "✅ Exists"; else echo "⚠️  Will be created on first run"; fi
+      echo -n "Docker: "
+      if command -v docker >/dev/null 2>&1; then echo "✅ Available"; else echo "❌ Not installed"; fi
+
+  # Quick commands
+  start:
+    desc: Quick start (same as dev)
+    cmd: task dev
+    
+  logs:
+    desc: View application logs (if running in Docker)
+    cmd: task docker:logs
+    
+  stop:
+    desc: Stop all running containers
+    cmd: |
+      docker compose -f compose.dev.yml down 2>/dev/null || true
+      docker compose down 2>/dev/null || true
+      echo "All containers stopped" 

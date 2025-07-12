@@ -1,5 +1,11 @@
 // web/js/charts.js
-import { state } from './state.js';
+import { state, filterDataForHeadToHead } from './state.js';
+
+// Store chart instances globally for proper cleanup
+let trendsChart = null;
+let distributionChart = null;
+let dailyChart = null;
+let progressChart = null;
 
 // Function to add toggle all button to charts
 function addToggleAllButton(chartId, chartInstance) {
@@ -58,9 +64,18 @@ function addToggleAllButton(chartId, chartInstance) {
 export function updateTrendsChart() {
     const ctx = document.getElementById('trendsChart').getContext('2d');
 
+    // Destroy existing chart if it exists
+    if (trendsChart) {
+        trendsChart.destroy();
+        trendsChart = null;
+    }
+
+    // Filter scores for head-to-head mode
+    const scoresToConsider = filterDataForHeadToHead(state.allScores);
+
     // Group scores by user and date
     const userProgress = {};
-    state.allScores.forEach(score => {
+    scoresToConsider.forEach(score => {
         if (!userProgress[score.username]) {
             userProgress[score.username] = {};
         }
@@ -68,7 +83,7 @@ export function updateTrendsChart() {
     });
 
     // Get unique dates and sort them
-    const dates = [...new Set(state.allScores.map(s => s.date))].sort();
+    const dates = [...new Set(scoresToConsider.map(s => s.date))].sort().reverse();
 
     // Create datasets for each user with unique colors
     const colors = [
@@ -90,7 +105,7 @@ export function updateTrendsChart() {
         };
     });
 
-    const trendsChart = new Chart(ctx, {
+    trendsChart = new Chart(ctx, {
         type: 'line',
         data: {
             labels: dates,
@@ -118,7 +133,7 @@ export function updateTrendsChart() {
             plugins: {
                 title: {
                     display: true,
-                    text: 'Score Trends Over Time'
+                    text: state.headToHeadMode ? 'Score Trends: .cyco vs clicky6792' : 'Score Trends Over Time'
                 },
                 legend: {
                     onClick: (e, legendItem, legend) => {
@@ -138,19 +153,28 @@ export function updateTrendsChart() {
 export function updateDistributionChart() {
     const ctx = document.getElementById('distributionChart').getContext('2d');
 
+    // Destroy existing chart if it exists
+    if (distributionChart) {
+        distributionChart.destroy();
+        distributionChart = null;
+    }
+
+    // Filter scores for head-to-head mode
+    const scoresToConsider = filterDataForHeadToHead(state.allScores);
+
     // Count score frequencies
     const scoreCounts = {};
     for (let i = 1; i <= 6; i++) {
         scoreCounts[i] = 0;
     }
 
-    state.allScores.forEach(score => {
+    scoresToConsider.forEach(score => {
         if (!score.failed) {
             scoreCounts[score.score]++;
         }
     });
 
-    new Chart(ctx, {
+    distributionChart = new Chart(ctx, {
         type: 'bar',
         data: {
             labels: ['1', '2', '3', '4', '5', '6'],
@@ -188,7 +212,7 @@ export function updateDistributionChart() {
             plugins: {
                 title: {
                     display: true,
-                    text: 'Score Distribution'
+                    text: state.headToHeadMode ? 'Score Distribution: .cyco vs clicky6792' : 'Score Distribution'
                 }
             }
         }
@@ -199,9 +223,47 @@ export function updateDistributionChart() {
 export function updateDailyChart() {
     const ctx = document.getElementById('dailyChart').getContext('2d');
 
-    const sortedDaily = state.dailyStats.sort((a, b) => new Date(a.date) - new Date(b.date));
+    // Destroy existing chart if it exists
+    if (dailyChart) {
+        dailyChart.destroy();
+        dailyChart = null;
+    }
 
-    new Chart(ctx, {
+    // Filter daily stats for head-to-head mode if needed
+    let dailyStatsToUse = state.dailyStats;
+    if (state.headToHeadMode) {
+        // Recalculate daily stats for just the head-to-head players
+        const h2hScores = filterDataForHeadToHead(state.allScores);
+        const dailyData = {};
+
+        h2hScores.forEach(score => {
+            if (!dailyData[score.date]) {
+                dailyData[score.date] = { scores: [], failed: 0 };
+            }
+            if (score.failed) {
+                dailyData[score.date].failed++;
+            } else {
+                dailyData[score.date].scores.push(score.score);
+            }
+        });
+
+        dailyStatsToUse = Object.keys(dailyData).map(date => {
+            const dayData = dailyData[date];
+            const scores = dayData.scores;
+            return {
+                date: date,
+                players: scores.length + dayData.failed,
+                avg_score: scores.length > 0 ? (scores.reduce((sum, s) => sum + s, 0) / scores.length).toFixed(2) : null,
+                best_score: scores.length > 0 ? Math.min(...scores) : null,
+                worst_score: scores.length > 0 ? Math.max(...scores) : null,
+                failed_count: dayData.failed
+            };
+        }).filter(d => d.avg_score !== null);
+    }
+
+    const sortedDaily = dailyStatsToUse.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    dailyChart = new Chart(ctx, {
         type: 'line',
         data: {
             labels: sortedDaily.map(d => d.date),
@@ -216,6 +278,12 @@ export function updateDailyChart() {
                 data: sortedDaily.map(d => d.best_score),
                 borderColor: '#48bb78',
                 backgroundColor: '#48bb7820',
+                tension: 0.1
+            }, {
+                label: 'Worst Score',
+                data: sortedDaily.map(d => d.worst_score),
+                borderColor: '#e74c3c',
+                backgroundColor: '#e74c3c20',
                 tension: 0.1
             }]
         },
@@ -235,26 +303,35 @@ export function updateDailyChart() {
             plugins: {
                 title: {
                     display: true,
-                    text: 'Daily Performance'
+                    text: state.headToHeadMode ? 'Daily Performance: .cyco vs clicky6792' : 'Daily Performance'
                 }
             }
         }
     });
 }
 
-// Update progress chart (moving average) with toggle all button
+// Update progress chart (moving average)
 export function updateProgressChart() {
     const ctx = document.getElementById('progressChart').getContext('2d');
 
+    // Destroy existing chart if it exists
+    if (progressChart) {
+        progressChart.destroy();
+        progressChart = null;
+    }
+
+    // Filter scores for head-to-head mode
+    const scoresToConsider = filterDataForHeadToHead(state.allScores);
+
     // Calculate 7-day moving average for each user with unique colors
-    const users = [...new Set(state.allScores.map(s => s.username))];
+    const users = [...new Set(scoresToConsider.map(s => s.username))];
     const colors = [
         '#e74c3c', '#3498db', '#f39c12', '#2ecc71', '#9b59b6',
         '#e67e22', '#1abc9c', '#34495e', '#f1c40f', '#8e44ad',
         '#d35400', '#27ae60', '#2980b9', '#c0392b', '#16a085'
     ];
     const datasets = users.map((username, index) => {
-        const userScores = state.allScores.filter(s => s.username === username && !s.failed)
+        const userScores = scoresToConsider.filter(s => s.username === username && !s.failed)
             .sort((a, b) => new Date(a.date) - new Date(b.date));
 
         const movingAvg = [];
@@ -275,7 +352,7 @@ export function updateProgressChart() {
         };
     });
 
-    const progressChart = new Chart(ctx, {
+    progressChart = new Chart(ctx, {
         type: 'line',
         data: {
             labels: Array.from({length: Math.max(...datasets.map(d => d.data.length))}, (_, i) => i + 1),
@@ -303,7 +380,7 @@ export function updateProgressChart() {
             plugins: {
                 title: {
                     display: true,
-                    text: '7-Game Moving Average'
+                    text: state.headToHeadMode ? '7-Game Moving Average: .cyco vs clicky6792' : '7-Game Moving Average'
                 },
                 legend: {
                     onClick: (e, legendItem, legend) => {
