@@ -14,7 +14,7 @@ export const state: AppState = {
 };
 
 // Constants
-export const CHANNEL_ID = ''; // Hardcoded channel ID - INPUT CHANNEL ID
+export const CHANNEL_ID = (import.meta as any).env?.VITE_DISCORD_CHANNEL_ID || '';
 export const API_BASE = (import.meta as any).env?.VITE_API_BASE || window.location.origin + '/api';
 
 // Head-to-head players

@@ -110,7 +110,7 @@ export function updateAchievements(): void {
 
         // Consistency King - 10+ games with avg ≤ 3.0
         const avgScore = completedScores.length > 0 ?
-            completedScores.reduce((sum, s) => sum + s.score, 0) / completedScores.length : 6;
+            completedScores.reduce((sum, s) => sum + (s.score || 0), 0) / completedScores.length : 6;
         if (completedScores.length >= 10 && avgScore <= 3.0) {
             achievements.push({
                 icon: '⚖️',
@@ -136,7 +136,7 @@ export function updateAchievements(): void {
         let currentStreak = 0;
         let maxStreak = 0;
         sortedScores.forEach(score => {
-            if (!score.failed && score.score <= 3) {
+            if (!score.failed && score.score !== null && score.score <= 3) {
                 currentStreak++;
                 maxStreak = Math.max(maxStreak, currentStreak);
             } else {
@@ -195,7 +195,7 @@ export function updateAchievements(): void {
 
             for (let i = 0; i < sortedScores.length; i++) {
                 const score = sortedScores[i];
-                if (score.failed || score.score >= 5) {
+                if (score.failed || (score.score !== null && score.score >= 5)) {
                     currentBadStreak++;
                     worstStreak = Math.max(worstStreak, currentBadStreak);
                 } else {
@@ -312,7 +312,7 @@ export function updateAchievements(): void {
                 title: 'Sample Station',
                 desc: 'Score 4+ different values (20+ games)',
                 earned: true,
-                progress: `Scored: ${uniqueScores.sort((a, b) => a - b).join(', ')}`
+                progress: `Scored: ${uniqueScores.filter(s => s !== null).sort((a, b) => (a || 0) - (b || 0)).join(', ')}`
             });
         }
 

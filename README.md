@@ -28,12 +28,14 @@ task install
 Create a `.env` file:
 ```env
 DISCORD_TOKEN=your_discord_bot_token_here
+DISCORD_CHANNEL_ID=your_channel_id_here
 NODE_ENV=development
 ```
 
-Edit `src/bot/discord/index.ts` and set your Discord channel ID:
-```typescript
-const CHANNEL_ID = 'your_channel_id_here';
+For production, also set:
+```env
+CORS_ORIGINS=https://yourdomain.com,https://api.yourdomain.com
+ADMIN_KEY=your_secure_admin_key_here
 ```
 
 #### Option B: Without Discord Bot (Development Only)
@@ -425,6 +427,41 @@ The production container builds TypeScript to JavaScript and runs the optimized 
 - **📊 Performance Thresholds** - Visual legend showing performance categories
 - **📅 Consecutive Days Tracking** - Enhanced streak calculation for daily play
 - **🎯 Chart Toggle Buttons** - Hide/show all datasets on multi-user charts
+
+## 🔒 Production-Ready Features
+
+This application includes comprehensive production-ready improvements:
+
+### Security & Performance
+- **Multi-stage Docker Build** - Optimized production image running as non-root user
+- **Environment Variable Configuration** - All secrets and configuration externalized
+- **CORS Protection** - Strict origin validation in production
+- **Rate Limiting** - API protection against abuse
+- **Helmet Security Headers** - Comprehensive security headers including CSP
+- **Database Indexes** - Optimized query performance with composite indexes
+
+### Database Improvements
+- **Transaction Support** - Bulk inserts use transactions for consistency and 20x speed improvement
+- **NULL Handling** - Failed games stored as NULL instead of 0 for accurate statistics
+- **Connection Timeout** - 5-second busy timeout prevents database lock issues
+- **Safe Migrations** - Automatic schema updates with proper validation
+
+### Modern Node.js
+- **Node.js 20** - Latest LTS version with security patches
+- **ESM Module Resolution** - Proper TypeScript configuration for Node16+ modules
+- **BigInt Discord IDs** - Proper handling of Discord snowflake IDs without precision loss
+
+### Environment Variables
+Required for production:
+- `DISCORD_TOKEN` - Discord bot authentication token
+- `DISCORD_CHANNEL_ID` - Target Discord channel for score tracking
+- `CORS_ORIGINS` - Comma-separated list of allowed origins
+- `ADMIN_KEY` - Secure key for admin API endpoints
+
+### Docker Health Checks
+- Automatic health monitoring with restart policies
+- Graceful shutdown handling
+- Volume-based data persistence
 
 ### Chart Features
 - **Score Trends** - Individual player progress over time

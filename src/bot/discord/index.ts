@@ -2,9 +2,15 @@ import { Client, GatewayIntentBits, Message, TextChannel, PermissionFlagsBits, C
 import { validateChannelId, parseCostcodleScore } from '../util/index.js';
 import { getDatabaseManager } from '../db/index.js';
 import { DatabaseError } from '../../types/backend.js';
+import type { Score } from '../../types/index.js';
 
-// Hardcoded channel ID - INPUT CHANNEL ID
-const CHANNEL_ID = '';
+// Get Discord channel ID from environment variable
+const CHANNEL_ID = process.env.DISCORD_CHANNEL_ID || '';
+
+// Validate channel ID is provided
+if (!CHANNEL_ID && process.env.NODE_ENV === 'production') {
+    throw new Error('DISCORD_CHANNEL_ID environment variable is required in production');
+}
 
 // Initialize Discord client
 const client = new Client({
@@ -139,37 +145,49 @@ export async function scrapeHistoricalMessages(channelId: string, limit: number 
 
         console.log(`Total messages fetched: ${messages.length}`);
 
-        let savedCount = 0;
         const dbManager = getDatabaseManager();
+        const scoresToInsert: Omit<Score, 'id'>[] = [];
 
+        // Process messages and collect scores for bulk insert
         for (const message of messages) {
             if (message.author.bot) continue;
 
             const result = parseCostcodleScore(message.content);
             if (result !== null) {
-                try {
-                    // Convert Discord message timestamp to EST and get date
-                    const messageDate = new Date(message.createdAt);
-                    const estDate = new Date(messageDate.toLocaleString("en-US", {timeZone: "America/New_York"}));
-                    const gameDate = estDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+                // Convert Discord message timestamp to EST and get date
+                const messageDate = new Date(message.createdAt);
+                const estDate = new Date(messageDate.toLocaleString("en-US", {timeZone: "America/New_York"}));
+                const gameDate = estDate.toISOString().split('T')[0]; // YYYY-MM-DD format
 
-                    await dbManager.saveScore(
-                        message.author.id,
-                        message.author.username,
-                        result.score || 0, // Use 0 for failed scores
-                        result.failed,
-                        gameDate, // Use EST-adjusted date
-                        message.id,
-                        message.content,
-                        message.createdAt.toISOString() // Keep original UTC timestamp for message_date
-                    );
-                    savedCount++;
-                } catch (error) {
-                    // Ignore duplicate entries but log other errors
-                    if (error instanceof DatabaseError && !error.message.includes('UNIQUE constraint failed')) {
-                        console.error('Error saving historical score:', error.message);
-                    } else if (error instanceof Error && !error.message.includes('UNIQUE constraint failed')) {
-                        console.error('Error saving historical score:', error.message);
+                scoresToInsert.push({
+                    username: message.author.username,
+                    score: result.failed ? null : result.score,
+                    failed: result.failed,
+                    date: gameDate,
+                    message_id: message.id,
+                    message_date: message.createdAt.toISOString(),
+                    created_at: new Date().toISOString()
+                });
+            }
+        }
+
+        // Bulk insert all scores in a transaction
+        let savedCount = 0;
+        if (scoresToInsert.length > 0) {
+            try {
+                await dbManager.bulkInsertScores(scoresToInsert);
+                savedCount = scoresToInsert.length;
+            } catch (error) {
+                console.error('Error bulk inserting scores:', error);
+                // Fall back to individual inserts if bulk insert fails
+                for (const score of scoresToInsert) {
+                    try {
+                        await dbManager.insertScore(score);
+                        savedCount++;
+                    } catch (individualError) {
+                        if (individualError instanceof DatabaseError && !individualError.message.includes('UNIQUE constraint failed')) {
+                            console.error('Error saving individual score:', individualError.message);
+                        }
                     }
                 }
             }
@@ -267,16 +285,16 @@ client.on('messageCreate', async (message: Message) => {
             const gameDate = estDate.toISOString().split('T')[0]; // YYYY-MM-DD format
 
             const dbManager = getDatabaseManager();
-            await dbManager.saveScore(
-                message.author.id,
-                message.author.username,
-                result.score || 0, // Use 0 for failed scores
-                result.failed,
-                gameDate, // Use EST-adjusted date
-                message.id,
-                message.content,
-                message.createdAt.toISOString() // Keep original UTC timestamp for message_date
-            );
+                                await dbManager.saveScore(
+                        message.author.id,
+                        message.author.username,
+                        result.failed ? null : result.score, // Use NULL for failed scores
+                        result.failed,
+                        gameDate, // Use EST-adjusted date
+                        message.id,
+                        message.content,
+                        message.createdAt.toISOString() // Keep original UTC timestamp for message_date
+                    );
 
             const displayScore = result.failed ? 'X' : result.score;
             console.log(`Saved score ${displayScore}/6 for ${message.author.username} on ${gameDate} (EST)`);

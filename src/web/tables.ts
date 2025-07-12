@@ -24,7 +24,7 @@ function calculateDailyWins(username: string): string {
         if (!score.failed) {
             dailyScores[score.date].push({
                 username: score.username,
-                score: score.score
+                score: score.score || 0
             });
         }
     });
@@ -141,7 +141,7 @@ export function updateUserStatsTable(): void {
         const firstDate = sortedScores.length > 0 ? sortedScores[0].date : 'N/A';
         const lastDate = sortedScores.length > 0 ? sortedScores[sortedScores.length - 1].date : 'N/A';
         const mostRecentScore = sortedScores.length > 0 ?
-            (sortedScores[sortedScores.length - 1].failed ? 'X' : sortedScores[sortedScores.length - 1].score.toString()) : 'N/A';
+            (sortedScores[sortedScores.length - 1].failed ? 'X' : (sortedScores[sortedScores.length - 1].score?.toString() || '0')) : 'N/A';
 
         // Calculate daily wins
         const dailyWins = calculateDailyWins(user.username);
@@ -298,9 +298,9 @@ export function updateMonthlyLeaderboard(): void {
             user.points += 7; // X = 7 points (golf scoring)
         } else {
             user.completedGames++;
-            user.totalScore += score.score;
-            user.bestScore = Math.min(user.bestScore, score.score);
-            user.points += score.score; // Golf scoring: 1=1pt, 2=2pts, etc.
+                    user.totalScore += score.score || 0;
+        user.bestScore = Math.min(user.bestScore, score.score || 6);
+        user.points += score.score || 0; // Golf scoring: 1=1pt, 2=2pts, etc.
         }
     });
 
@@ -375,11 +375,11 @@ export function updatePerformanceSummary(): void {
     const successRate = totalGames > 0 ? ((completedGames / totalGames) * 100).toFixed(1) : '0';
 
     const avgScore = completedGames > 0
-        ? (scoresToConsider.filter(s => !s.failed).reduce((sum, s) => sum + s.score, 0) / completedGames).toFixed(2)
+        ? (scoresToConsider.filter(s => !s.failed).reduce((sum, s) => sum + (s.score || 0), 0) / completedGames).toFixed(2)
         : 'N/A';
 
     const bestScore = completedGames > 0
-        ? Math.min(...scoresToConsider.filter(s => !s.failed).map(s => s.score))
+        ? Math.min(...scoresToConsider.filter(s => !s.failed && s.score !== null).map(s => s.score!))
         : 'N/A';
 
     const uniquePlayers = new Set(scoresToConsider.map(s => s.username)).size;
@@ -447,7 +447,7 @@ export function updateScoreHeatmap(): void {
                     if (current.failed && !best.failed) return best;
                     if (!current.failed && best.failed) return current;
                     if (current.failed && best.failed) return best;
-                    return current.score < best.score ? current : best;
+                    return (current.score || 0) < (best.score || 0) ? current : best;
                 });
                 scoreMatrix[user][date] = bestScore;
             } else {
@@ -490,9 +490,9 @@ export function updateScoreHeatmap(): void {
                     displayText = 'X';
                 } else {
                     const colors = ['#27ae60', '#2ecc71', '#f39c12', '#e67e22', '#e74c3c', '#c0392b'];
-                    bgColor = colors[score.score - 1];
-                    textColor = 'white';
-                    displayText = score.score.toString();
+                                    bgColor = colors[(score.score || 1) - 1];
+                textColor = 'white';
+                displayText = (score.score || 0).toString();
                 }
 
                 // Create Discord link if message_id exists

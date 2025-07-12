@@ -4,10 +4,10 @@
 export interface Score {
   id?: number;
   username: string;
-  score: number;
+  score: number | null;
   failed: boolean;
   date: string;
-  message_id?: string;
+  message_id?: string; // Discord snowflake as string to preserve precision
   message_date?: string;
   created_at?: string;
 }

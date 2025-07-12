@@ -29,6 +29,9 @@ services:
     
     environment:
       - DISCORD_TOKEN=${DISCORD_TOKEN}
+      - DISCORD_CHANNEL_ID=${DISCORD_CHANNEL_ID}
+      - CORS_ORIGINS=${CORS_ORIGINS:-}
+      - ADMIN_KEY=${ADMIN_KEY:-}
       - NODE_ENV=production
     
     network_mode: service:costcodle-ts

@@ -136,7 +136,7 @@ export function updateTrendsChart(): void {
         if (!userProgress[score.username]) {
             userProgress[score.username] = {};
         }
-        userProgress[score.username][score.date] = score.score;
+        userProgress[score.username][score.date] = score.score || 0;
     });
 
     // Get unique dates and sort them
@@ -231,7 +231,9 @@ export function updateDistributionChart(): void {
 
     scoresToConsider.forEach(score => {
         if (!score.failed) {
+            if (score.score !== null) {
             scoreCounts[score.score]++;
+        }
         }
     });
 
@@ -309,7 +311,9 @@ export function updateDailyChart(): void {
             if (score.failed) {
                 dailyData[score.date].failed++;
             } else {
+                if (score.score !== null) {
                 dailyData[score.date].scores.push(score.score);
+            }
             }
         });
 
@@ -408,7 +412,7 @@ export function updateProgressChart(): void {
         for (let i = 0; i < userScores.length; i++) {
             const start = Math.max(0, i - 6);
             const subset = userScores.slice(start, i + 1);
-            const avg = subset.reduce((sum, s) => sum + s.score, 0) / subset.length;
+            const avg = subset.reduce((sum, s) => sum + (s.score || 0), 0) / subset.length;
             movingAvg.push(avg);
         }
 

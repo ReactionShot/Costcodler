@@ -14,8 +14,8 @@ export function validateUsername(username: string): boolean {
            /^[a-zA-Z0-9_.-]+$/.test(username);
 }
 
-export function validateScore(score: number): boolean {
-    return Number.isInteger(score) && score >= 1 && score <= 6;
+export function validateScore(score: number | null): boolean {
+    return score !== null && Number.isInteger(score) && score >= 1 && score <= 6;
 }
 
 export function validateDate(date: string): boolean {

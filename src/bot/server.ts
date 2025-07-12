@@ -57,12 +57,18 @@ const generalLimiter = rateLimit({
 app.use('/api/', generalLimiter);
 
 // CORS configuration - restrict to specific origins in production
+const allowedOrigins = process.env.CORS_ORIGINS?.split(',') || [];
 const corsOptions: cors.CorsOptions = {
     origin: config.NODE_ENV === 'production'
-        ? ['http://localhost:3000', 'https://yourdomain.com'] // INPUT YOUR DOMAIN
+        ? allowedOrigins.length > 0 ? allowedOrigins : false
         : true,
     credentials: true
 };
+
+// Validate CORS origins in production
+if (config.NODE_ENV === 'production' && allowedOrigins.length === 0) {
+    console.warn('⚠️  CORS_ORIGINS environment variable not set in production. CORS will be disabled.');
+}
 app.use(cors(corsOptions));
 
 app.use(express.json({ limit: '10mb' }));

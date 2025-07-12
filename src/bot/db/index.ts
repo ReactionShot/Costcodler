@@ -9,7 +9,7 @@ interface ScoreRow {
     id: number;
     user_id: string;
     username: string;
-    score: number;
+    score: number | null;
     failed: number; // SQLite stores boolean as 0/1
     date: string;
     message_id: string;
@@ -47,6 +47,9 @@ const sqlite = sqlite3.verbose();
 const dbPath = process.env.NODE_ENV === 'production' ? '/data/costcodle_scores.db' : './costcodle_scores.db';
 const db = new sqlite.Database(dbPath);
 
+// Configure database for better performance and concurrency
+db.configure('busyTimeout', 5000); // 5 second timeout for locked database
+
 // Database manager implementation
 class DatabaseManagerImpl implements DatabaseManager {
     public db: sqlite3.Database;
@@ -80,13 +83,58 @@ class DatabaseManagerImpl implements DatabaseManager {
 
                 console.log('✅ Database table ready');
 
-                // Now try to add the message_date column if it doesn't exist (for migration)
-                this.db.run(`ALTER TABLE scores ADD COLUMN message_date DATETIME`, (err) => {
-                    if (err && !err.message.includes('duplicate column name')) {
-                        console.log('ℹ️ Note: message_date column already exists or table is new');
+                // Check if message_date column exists before adding it
+                this.db.all(`PRAGMA table_info(scores)`, (err, columns) => {
+                    if (err) {
+                        console.error('❌ Error checking table structure:', err);
+                        return reject(new DatabaseError('Failed to check table structure', err));
                     }
-                    resolve();
+
+                    const hasMessageDate = columns.some((col: any) => col.name === 'message_date');
+                    
+                    if (!hasMessageDate) {
+                        this.db.run(`ALTER TABLE scores ADD COLUMN message_date DATETIME`, (err) => {
+                            if (err) {
+                                console.error('❌ Error adding message_date column:', err);
+                                return reject(new DatabaseError('Failed to add message_date column', err));
+                            }
+                            console.log('✅ Added message_date column');
+                            this.createIndexes(resolve, reject);
+                        });
+                    } else {
+                        this.createIndexes(resolve, reject);
+                    }
                 });
+            });
+        });
+    }
+
+    // Create database indexes for better performance
+    private createIndexes(resolve: () => void, reject: (error: DatabaseError) => void): void {
+        const indexes = [
+            { name: 'idx_scores_date', sql: 'CREATE INDEX IF NOT EXISTS idx_scores_date ON scores(date)' },
+            { name: 'idx_scores_username', sql: 'CREATE INDEX IF NOT EXISTS idx_scores_username ON scores(username)' },
+            { name: 'idx_scores_message_id', sql: 'CREATE INDEX IF NOT EXISTS idx_scores_message_id ON scores(message_id)' },
+            { name: 'idx_scores_message_date', sql: 'CREATE INDEX IF NOT EXISTS idx_scores_message_date ON scores(message_date)' },
+            { name: 'idx_scores_composite', sql: 'CREATE INDEX IF NOT EXISTS idx_scores_composite ON scores(username, date)' }
+        ];
+
+        let indexesCreated = 0;
+        let hasError = false;
+
+        indexes.forEach(index => {
+            this.db.run(index.sql, (err) => {
+                if (err && !hasError) {
+                    console.error(`❌ Error creating index ${index.name}:`, err);
+                    hasError = true;
+                    return reject(new DatabaseError(`Failed to create index ${index.name}`, err));
+                }
+                
+                indexesCreated++;
+                if (indexesCreated === indexes.length && !hasError) {
+                    console.log(`✅ Created ${indexes.length} database indexes`);
+                    resolve();
+                }
             });
         });
     }
@@ -113,9 +161,12 @@ class DatabaseManagerImpl implements DatabaseManager {
             const rawMessage = ''; // Default empty raw message
             const sanitizedMessage = sanitizeMessage(rawMessage);
 
+            // Store NULL instead of 0 for failed games
+            const scoreValue = score.failed ? null : score.score;
+            
             this.db.run(
                 'INSERT OR REPLACE INTO scores (user_id, username, score, failed, date, message_id, raw_message, message_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-                [userId, score.username, score.score, score.failed, score.date, score.message_id, sanitizedMessage, score.message_date],
+                [userId, score.username, scoreValue, score.failed, score.date, score.message_id, sanitizedMessage, score.message_date],
                 function(err) {
                     if (err) {
                         reject(new DatabaseError('Failed to insert score', err));
@@ -251,7 +302,7 @@ class DatabaseManagerImpl implements DatabaseManager {
     async saveScore(
         userId: string,
         username: string,
-        score: number,
+        score: number | null,
         failed: boolean,
         date: string,
         messageId: string,
@@ -269,6 +320,75 @@ class DatabaseManagerImpl implements DatabaseManager {
         };
         
         return await this.insertScore(scoreData);
+    }
+
+    // Bulk insert scores within a transaction for better performance
+    async bulkInsertScores(scores: Omit<Score, 'id'>[]): Promise<number[]> {
+        return new Promise((resolve, reject) => {
+            if (scores.length === 0) {
+                return resolve([]);
+            }
+
+            const results: number[] = [];
+            let completed = 0;
+
+            // Start transaction
+            this.db.run('BEGIN TRANSACTION', (err) => {
+                if (err) {
+                    return reject(new DatabaseError('Failed to start transaction', err));
+                }
+
+                // Insert all scores
+                scores.forEach((score, index) => {
+                    // Validate inputs
+                    if (!validateUsername(score.username)) {
+                        this.db.run('ROLLBACK', () => {
+                            reject(new DatabaseError(`Invalid username at index ${index}`));
+                        });
+                        return;
+                    }
+                    if (!score.failed && !validateScore(score.score)) {
+                        this.db.run('ROLLBACK', () => {
+                            reject(new DatabaseError(`Invalid score at index ${index}`));
+                        });
+                        return;
+                    }
+
+                    const userId = 'user_' + score.username;
+                    const rawMessage = '';
+                    const sanitizedMessage = sanitizeMessage(rawMessage);
+                    const scoreValue = score.failed ? null : score.score;
+
+                    this.db.run(
+                        'INSERT OR REPLACE INTO scores (user_id, username, score, failed, date, message_id, raw_message, message_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                        [userId, score.username, scoreValue, score.failed, score.date, score.message_id, sanitizedMessage, score.message_date],
+                        function(this: any, err: any) {
+                            if (err) {
+                                // Rollback on error
+                                db.run('ROLLBACK', () => {
+                                    reject(new DatabaseError(`Failed to insert score at index ${index}`, err));
+                                });
+                                return;
+                            }
+
+                            results[index] = this.lastID;
+                            completed++;
+
+                            // Commit when all inserts are complete
+                            if (completed === scores.length) {
+                                db.run('COMMIT', (err: any) => {
+                                    if (err) {
+                                        reject(new DatabaseError('Failed to commit transaction', err));
+                                    } else {
+                                        resolve(results);
+                                    }
+                                });
+                            }
+                        }
+                    );
+                });
+            });
+        });
     }
 
     // Check if database is empty
@@ -313,7 +433,7 @@ export async function initializeDatabase(): Promise<void> {
 export async function saveScore(
     userId: string, 
     username: string, 
-    score: number, 
+    score: number | null, 
     failed: boolean, 
     date: string, 
     messageId: string, 

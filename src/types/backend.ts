@@ -10,10 +10,11 @@ export interface DatabaseManager {
   init(): Promise<void>;
   initializeDatabase(): Promise<void>;
   insertScore(score: Omit<Score, 'id'>): Promise<number>;
+  bulkInsertScores(scores: Omit<Score, 'id'>[]): Promise<number[]>;
   saveScore(
     userId: string,
     username: string,
-    score: number,
+    score: number | null,
     failed: boolean,
     date: string,
     messageId: string,
