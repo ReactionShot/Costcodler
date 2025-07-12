@@ -1,6 +1,7 @@
-const { Client, GatewayIntentBits } = require('discord.js');
-const { validateChannelId, parseCostcodleScore } = require('../util');
-const { saveScore, checkDatabaseEmpty, initializeDatabase } = require('../db');
+import { Client, GatewayIntentBits, Message, TextChannel, PermissionFlagsBits, Collection } from 'discord.js';
+import { validateChannelId, parseCostcodleScore } from '../util/index.js';
+import { getDatabaseManager } from '../db/index.js';
+import { DatabaseError } from '../../types/backend.js';
 
 // Hardcoded channel ID - INPUT CHANNEL ID
 const CHANNEL_ID = '';
@@ -15,7 +16,7 @@ const client = new Client({
 });
 
 // Function to generate mock data for development
-async function generateMockData() {
+async function generateMockData(): Promise<number> {
     const mockUsers = [
         'CostcoFan2024', 'BulkBuyer', 'HotDogLover', 'SampleStationPro', 'KirklandBest',
         'WarehouseWalker', 'ExecutiveMember', 'FoodCourtRegular', 'GoldStarMember'
@@ -37,7 +38,7 @@ async function generateMockData() {
         for (const username of playingUsers) {
             // Generate realistic score distribution
             const rand = Math.random();
-            let score, failed;
+            let score: number | null, failed: boolean;
             
             if (rand < 0.05) {
                 score = 1; failed = false; // 5% perfect games
@@ -59,10 +60,11 @@ async function generateMockData() {
                 // Generate a Discord snowflake-like ID (18 digits)
                 const mockMessageId = `${(100000000000000000 + savedCount).toString()}`;
                 
-                await saveScore(
+                const dbManager = getDatabaseManager();
+                await dbManager.saveScore(
                     `mock_${username.toLowerCase()}`,
                     username,
-                    score,
+                    score || 0, // Use 0 for failed scores
                     failed,
                     dateStr,
                     mockMessageId,
@@ -72,7 +74,9 @@ async function generateMockData() {
                 savedCount++;
             } catch (error) {
                 // Ignore duplicates
-                if (!error.message.includes('UNIQUE constraint failed')) {
+                if (error instanceof DatabaseError && !error.message.includes('UNIQUE constraint failed')) {
+                    console.error('Error saving mock score:', error.message);
+                } else if (error instanceof Error && !error.message.includes('UNIQUE constraint failed')) {
                     console.error('Error saving mock score:', error.message);
                 }
             }
@@ -83,21 +87,27 @@ async function generateMockData() {
 }
 
 // Function to scrape historical messages with validation
-async function scrapeHistoricalMessages(channelId, limit = 10000) {
+export async function scrapeHistoricalMessages(channelId: string, limit: number = 10000): Promise<number> {
     if (!validateChannelId(channelId)) {
         throw new Error('Invalid channel ID');
     }
 
     try {
         const channel = await client.channels.fetch(channelId);
+        if (!channel || !channel.isTextBased()) {
+            throw new Error('Channel not found or is not a text channel');
+        }
+
+        const textChannel = channel as TextChannel;
 
         // Check if bot has permission to read channel
-        if (!channel.permissionsFor(client.user).has('ReadMessageHistory')) {
+        const permissions = textChannel.permissionsFor(client.user!);
+        if (!permissions || !permissions.has(PermissionFlagsBits.ReadMessageHistory)) {
             throw new Error('Bot does not have permission to read message history');
         }
 
-        let messages = [];
-        let lastMessageId = null;
+        let messages: Message[] = [];
+        let lastMessageId: string | null = null;
         let totalFetched = 0;
 
         console.log(`Starting to scrape channel ${channelId}...`);
@@ -105,12 +115,12 @@ async function scrapeHistoricalMessages(channelId, limit = 10000) {
         // Keep fetching until we get all messages or hit the limit
         while (totalFetched < limit) {
             const batchSize = Math.min(100, limit - totalFetched);
-            const options = { limit: batchSize };
+            const options: { limit: number; before?: string } = { limit: batchSize };
             if (lastMessageId) {
                 options.before = lastMessageId;
             }
 
-            const batch = await channel.messages.fetch(options);
+            const batch: Collection<string, Message> = await textChannel.messages.fetch(options);
             if (batch.size === 0) {
                 console.log('No more messages to fetch');
                 break;
@@ -130,26 +140,35 @@ async function scrapeHistoricalMessages(channelId, limit = 10000) {
         console.log(`Total messages fetched: ${messages.length}`);
 
         let savedCount = 0;
+        const dbManager = getDatabaseManager();
+
         for (const message of messages) {
             if (message.author.bot) continue;
 
             const result = parseCostcodleScore(message.content);
             if (result !== null) {
                 try {
-                    await saveScore(
+                    // Convert Discord message timestamp to EST and get date
+                    const messageDate = new Date(message.createdAt);
+                    const estDate = new Date(messageDate.toLocaleString("en-US", {timeZone: "America/New_York"}));
+                    const gameDate = estDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+
+                    await dbManager.saveScore(
                         message.author.id,
                         message.author.username,
-                        result.score,
+                        result.score || 0, // Use 0 for failed scores
                         result.failed,
-                        message.createdAt.toISOString().split('T')[0],
+                        gameDate, // Use EST-adjusted date
                         message.id,
                         message.content,
-                        message.createdAt.toISOString()
+                        message.createdAt.toISOString() // Keep original UTC timestamp for message_date
                     );
                     savedCount++;
                 } catch (error) {
                     // Ignore duplicate entries but log other errors
-                    if (!error.message.includes('UNIQUE constraint failed')) {
+                    if (error instanceof DatabaseError && !error.message.includes('UNIQUE constraint failed')) {
+                        console.error('Error saving historical score:', error.message);
+                    } else if (error instanceof Error && !error.message.includes('UNIQUE constraint failed')) {
                         console.error('Error saving historical score:', error.message);
                     }
                 }
@@ -165,8 +184,9 @@ async function scrapeHistoricalMessages(channelId, limit = 10000) {
 }
 
 // Function to check if database is empty and scrape if needed
-async function checkAndScrapeIfEmpty() {
-    const isEmpty = await checkDatabaseEmpty();
+export async function checkAndScrapeIfEmpty(): Promise<number> {
+    const dbManager = getDatabaseManager();
+    const isEmpty = await dbManager.checkDatabaseEmpty();
     
     if (isEmpty) {
         // If no Discord token in development, generate mock data
@@ -177,7 +197,8 @@ async function checkAndScrapeIfEmpty() {
                 console.log(`✅ Mock data generated: ${mockCount} scores created`);
                 return mockCount;
             } catch (error) {
-                console.error('❌ Failed to generate mock data:', error.message);
+                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                console.error('❌ Failed to generate mock data:', errorMessage);
                 return 0;
             }
         } else if (process.env.DISCORD_TOKEN) {
@@ -187,7 +208,8 @@ async function checkAndScrapeIfEmpty() {
                 console.log(`✅ Automatic historical scrape completed: ${scrapedCount} scores imported`);
                 return scrapedCount;
             } catch (error) {
-                console.error('❌ Automatic historical scrape failed:', error.message);
+                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                console.error('❌ Automatic historical scrape failed:', errorMessage);
                 return 0; // Don't reject, just continue without historical data
             }
         }
@@ -195,15 +217,19 @@ async function checkAndScrapeIfEmpty() {
         console.log('Database has existing data, skipping initialization');
         return 0;
     }
+    
+    // If no conditions are met, return 0
+    return 0;
 }
 
 // Discord bot event handlers
 client.once('ready', async () => {
-    console.log(`Bot is ready! Logged in as ${client.user.tag}`);
+    console.log(`Bot is ready! Logged in as ${client.user!.tag}`);
 
     // Initialize database first
     try {
-        await initializeDatabase();
+        const dbManager = getDatabaseManager();
+        await dbManager.initializeDatabase();
 
         // Then check if database is empty and scrape historical data if needed
         await checkAndScrapeIfEmpty();
@@ -213,16 +239,17 @@ client.once('ready', async () => {
 });
 
 // Initialize database and mock data for development (when Discord is not available)
-async function initializeDevelopmentMode() {
+export async function initializeDevelopmentMode(): Promise<void> {
     try {
-        await initializeDatabase();
+        const dbManager = getDatabaseManager();
+        await dbManager.initializeDatabase();
         await checkAndScrapeIfEmpty();
     } catch (error) {
         console.error('Error during development initialization:', error);
     }
 }
 
-client.on('messageCreate', async (message) => {
+client.on('messageCreate', async (message: Message) => {
     // Ignore bot messages
     if (message.author.bot) return;
 
@@ -239,10 +266,11 @@ client.on('messageCreate', async (message) => {
             const estDate = new Date(messageDate.toLocaleString("en-US", {timeZone: "America/New_York"}));
             const gameDate = estDate.toISOString().split('T')[0]; // YYYY-MM-DD format
 
-            await saveScore(
+            const dbManager = getDatabaseManager();
+            await dbManager.saveScore(
                 message.author.id,
                 message.author.username,
-                result.score,
+                result.score || 0, // Use 0 for failed scores
                 result.failed,
                 gameDate, // Use EST-adjusted date
                 message.id,
@@ -253,13 +281,14 @@ client.on('messageCreate', async (message) => {
             const displayScore = result.failed ? 'X' : result.score;
             console.log(`Saved score ${displayScore}/6 for ${message.author.username} on ${gameDate} (EST)`);
         } catch (error) {
-            console.error('Error saving score:', error.message);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            console.error('Error saving score:', errorMessage);
         }
     }
 });
 
 // Function to start the Discord bot
-async function startBot() {
+export async function startBot(): Promise<void> {
     // Skip Discord bot in development if no token provided
     if (!process.env.DISCORD_TOKEN) {
         if (process.env.NODE_ENV === 'development') {
@@ -281,7 +310,7 @@ async function startBot() {
 }
 
 // Function to stop the Discord bot
-async function stopBot() {
+export async function stopBot(): Promise<void> {
     try {
         await client.destroy();
         console.log('Discord bot stopped');
@@ -290,12 +319,5 @@ async function stopBot() {
     }
 }
 
-module.exports = {
-    client,
-    scrapeHistoricalMessages,
-    checkAndScrapeIfEmpty,
-    generateMockData,
-    initializeDevelopmentMode,
-    startBot,
-    stopBot
-}; 
+// Export the client for advanced operations
+export { client }; 

@@ -1,8 +1,9 @@
-// web/js/achievements.js
+// src/web/achievements.ts
 import { state, filterDataForHeadToHead, HEAD_TO_HEAD_PLAYERS } from './state.js';
+import type { Score, Achievement } from '../types/index.js';
 
 // Get achievement icons for a user
-function getAchievementIcons(username) {
+function getAchievementIcons(username: string): string {
     if (!state.userAchievements[username]) return '';
 
     return state.userAchievements[username]
@@ -12,7 +13,7 @@ function getAchievementIcons(username) {
 }
 
 // Update achievements system - now calculates for all users and stores globally
-export function updateAchievements() {
+export function updateAchievements(): void {
     if (state.allScores.length === 0) {
         state.userAchievements = {};
         return;
@@ -25,14 +26,14 @@ export function updateAchievements() {
     users.forEach(username => {
         const userScores = state.allScores.filter(s => s.username === username);
         const completedScores = userScores.filter(s => !s.failed);
-        const sortedScores = userScores.sort((a, b) => new Date(a.date) - new Date(b.date));
+        const sortedScores = userScores.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-        const achievements = [];
+        const achievements: Achievement[] = [];
 
         // First Blood - First person to submit a score each day
         if (state.allScores.length > 0) {
-            const firstEverDate = Math.min(...state.allScores.map(s => new Date(s.date)));
-            const userFirstDate = userScores.length > 0 ? Math.min(...userScores.map(s => new Date(s.date))) : null;
+            const firstEverDate = Math.min(...state.allScores.map(s => new Date(s.date).getTime()));
+            const userFirstDate = userScores.length > 0 ? Math.min(...userScores.map(s => new Date(s.date).getTime())) : null;
             if (userFirstDate && userFirstDate === firstEverDate) {
                 achievements.push({ icon: '🩸', title: 'First Blood', desc: 'First to submit a Costcodle score', earned: true });
             }
@@ -272,7 +273,7 @@ export function updateAchievements() {
         for (let i = 1; i < uniqueDates.length; i++) {
             const prevDate = new Date(uniqueDates[i-1]);
             const currDate = new Date(uniqueDates[i]);
-            const dayDiff = (currDate - prevDate) / (1000 * 60 * 60 * 24);
+            const dayDiff = (currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24);
 
             if (dayDiff === 1) {
                 currentConsecutive++;
@@ -311,7 +312,7 @@ export function updateAchievements() {
                 title: 'Sample Station',
                 desc: 'Score 4+ different values (20+ games)',
                 earned: true,
-                progress: `Scored: ${uniqueScores.sort().join(', ')}`
+                progress: `Scored: ${uniqueScores.sort((a, b) => a - b).join(', ')}`
             });
         }
 
@@ -322,8 +323,9 @@ export function updateAchievements() {
 }
 
 // Update achievements widget - now full width with better layout
-export function updateAchievementsWidget(specificUser = null) {
+export function updateAchievementsWidget(specificUser: string | null = null): void {
     const container = document.getElementById('achievementsWidget');
+    if (!container) return;
 
     if (Object.keys(state.userAchievements).length === 0) {
         container.innerHTML = '<p>No achievements available</p>';
@@ -331,7 +333,7 @@ export function updateAchievementsWidget(specificUser = null) {
     }
 
     // Filter to specific user if requested, or apply head-to-head filter
-    let usersToShow;
+    let usersToShow: [string, Achievement[]][];
     if (specificUser) {
         usersToShow = [[specificUser, state.userAchievements[specificUser] || []]];
     } else {
@@ -339,7 +341,7 @@ export function updateAchievementsWidget(specificUser = null) {
         usersToShow = Object.entries(state.userAchievements)
             .filter(([username, achievements]) => {
                 if (!state.headToHeadMode) return achievements.length > 0;
-                return HEAD_TO_HEAD_PLAYERS.includes(username) && achievements.length > 0;
+                return (HEAD_TO_HEAD_PLAYERS as readonly string[]).includes(username) && achievements.length > 0;
             })
             .sort((a, b) => b[1].length - a[1].length);
     }
@@ -395,7 +397,7 @@ export function updateAchievementsWidget(specificUser = null) {
 }
 
 // Show achievements for a specific user
-export function showUserAchievements(username) {
+export function showUserAchievements(username: string): void {
     if (!state.userAchievements[username] || state.userAchievements[username].length === 0) {
         alert(`${username} has no achievements yet!`);
         return;
@@ -410,13 +412,18 @@ export function showUserAchievements(username) {
     updateAchievementsWidget(username);
 
     // Scroll to achievements
-    document.getElementById('achievementsWidget').scrollIntoView({ behavior: 'smooth' });
+    const achievementsWidget = document.getElementById('achievementsWidget');
+    if (achievementsWidget) {
+        achievementsWidget.scrollIntoView({ behavior: 'smooth' });
+    }
 }
 
 // Toggle all achievements visibility
-export function toggleAllAchievements() {
+export function toggleAllAchievements(): void {
     const widget = document.getElementById('achievementsWidget');
     const button = document.getElementById('toggleAchievementsBtn');
+
+    if (!widget || !button) return;
 
     if (state.achievementsExpanded) {
         widget.style.display = 'none';

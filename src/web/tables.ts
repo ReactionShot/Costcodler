@@ -1,8 +1,10 @@
-// web/js/tables.js
+// src/web/tables.ts
 import { state, filterDataForHeadToHead } from './state.js';
+import type { Score, UserStats, PerformanceBadge } from '../types/index.js';
+import type { EnhancedUserStats } from '../types/frontend.js';
 
 // Get performance badge based on average score
-function getPerformanceBadge(avgScore) {
+function getPerformanceBadge(avgScore: number): PerformanceBadge {
     if (avgScore <= 2.99) return { class: 'best', text: 'Excellent' };
     if (avgScore <= 3.49) return { class: 'good', text: 'Good' };
     if (avgScore <= 3.99) return { class: 'average', text: 'Average' };
@@ -10,11 +12,11 @@ function getPerformanceBadge(avgScore) {
 }
 
 // Calculate daily wins for a user
-function calculateDailyWins(username) {
+function calculateDailyWins(username: string): string {
     // Filter scores for head-to-head mode
     const scoresToConsider = filterDataForHeadToHead(state.allScores);
     
-    const dailyScores = {};
+    const dailyScores: Record<string, Array<{ username: string; score: number }>> = {};
     scoresToConsider.forEach(score => {
         if (!dailyScores[score.date]) {
             dailyScores[score.date] = [];
@@ -43,7 +45,7 @@ function calculateDailyWins(username) {
 }
 
 // Calculate consecutive days streak - updated to match monolithic version
-function calculateStreaks(userScores) {
+function calculateStreaks(userScores: Score[]): { currentStreak: number; maxStreak: number } {
     // Get unique dates for this user and sort them
     const uniqueDates = [...new Set(userScores.map(s => s.date))].sort();
 
@@ -63,7 +65,7 @@ function calculateStreaks(userScores) {
     for (let i = 1; i < uniqueDates.length; i++) {
         const prevDate = new Date(uniqueDates[i-1]);
         const currDate = new Date(uniqueDates[i]);
-        const dayDiff = (currDate - prevDate) / (1000 * 60 * 60 * 24);
+        const dayDiff = (currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24);
 
         if (dayDiff === 1) {
             tempStreak++;
@@ -95,7 +97,7 @@ function calculateStreaks(userScores) {
         for (let i = uniqueDates.length - 2; i >= 0; i--) {
             const currDate = new Date(uniqueDates[i + 1]);
             const prevDate = new Date(uniqueDates[i]);
-            const dayDiff = (currDate - prevDate) / (1000 * 60 * 60 * 24);
+            const dayDiff = (currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24);
 
             if (dayDiff === 1) {
                 currentStreak++;
@@ -111,8 +113,9 @@ function calculateStreaks(userScores) {
 }
 
 // Update user statistics table with enhanced data and achievement icons
-export function updateUserStatsTable() {
+export function updateUserStatsTable(): void {
     const container = document.getElementById('userStats');
+    if (!container) return;
 
     if (state.userStats.length === 0 || state.allScores.length === 0) {
         container.innerHTML = '<p>No data available</p>';
@@ -128,17 +131,17 @@ export function updateUserStatsTable() {
     }
 
     // Calculate additional stats for each user
-    const enhancedStats = filteredUserStats.map(user => {
+    const enhancedStats: EnhancedUserStats[] = filteredUserStats.map(user => {
         const userScores = state.allScores.filter(s => s.username === user.username);
 
         // Sort by date for streak and date calculations
-        const sortedScores = userScores.sort((a, b) => new Date(a.date) - new Date(b.date));
+        const sortedScores = userScores.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
         // Calculate dates
         const firstDate = sortedScores.length > 0 ? sortedScores[0].date : 'N/A';
         const lastDate = sortedScores.length > 0 ? sortedScores[sortedScores.length - 1].date : 'N/A';
         const mostRecentScore = sortedScores.length > 0 ?
-            (sortedScores[sortedScores.length - 1].failed ? 'X' : sortedScores[sortedScores.length - 1].score) : 'N/A';
+            (sortedScores[sortedScores.length - 1].failed ? 'X' : sortedScores[sortedScores.length - 1].score.toString()) : 'N/A';
 
         // Calculate daily wins
         const dailyWins = calculateDailyWins(user.username);
@@ -178,7 +181,7 @@ export function updateUserStatsTable() {
     `;
 
     enhancedStats.forEach(user => {
-        const avgScore = parseFloat(user.avg_score).toFixed(2);
+        const avgScore = parseFloat(user.avg_score.toString()).toFixed(2);
         const badge = getPerformanceBadge(user.avg_score);
 
         html += `
@@ -213,9 +216,23 @@ export function updateUserStatsTable() {
     container.innerHTML = html;
 }
 
+// Monthly stats interface
+interface MonthlyUserStats {
+    username: string;
+    games: number;
+    totalScore: number;
+    completedGames: number;
+    failed: number;
+    bestScore: number;
+    points: number;
+    avgScore: string;
+    avgPoints: string;
+}
+
 // Update monthly leaderboard with navigation
-export function updateMonthlyLeaderboard() {
+export function updateMonthlyLeaderboard(): void {
     const container = document.getElementById('monthlyLeaderboard');
+    if (!container) return;
 
     if (state.allScores.length === 0) {
         container.innerHTML = '<p>No data available</p>';
@@ -229,13 +246,18 @@ export function updateMonthlyLeaderboard() {
 
     // Update month display and button states
     const monthName = targetDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-    document.getElementById('currentMonthDisplay').textContent = monthName;
+    const currentMonthDisplay = document.getElementById('currentMonthDisplay');
+    if (currentMonthDisplay) {
+        currentMonthDisplay.textContent = monthName;
+    }
 
     // Enable/disable next button (can't go future from current month)
-    const nextBtn = document.getElementById('nextMonthBtn');
-    nextBtn.disabled = state.currentMonthOffset >= 0;
-    nextBtn.style.opacity = state.currentMonthOffset >= 0 ? '0.5' : '1';
-    nextBtn.style.cursor = state.currentMonthOffset >= 0 ? 'not-allowed' : 'pointer';
+    const nextBtn = document.getElementById('nextMonthBtn') as HTMLButtonElement;
+    if (nextBtn) {
+        nextBtn.disabled = state.currentMonthOffset >= 0;
+        nextBtn.style.opacity = state.currentMonthOffset >= 0 ? '0.5' : '1';
+        nextBtn.style.cursor = state.currentMonthOffset >= 0 ? 'not-allowed' : 'pointer';
+    }
 
     // Filter scores for target month
     let monthScores = state.allScores.filter(score => {
@@ -252,7 +274,7 @@ export function updateMonthlyLeaderboard() {
     }
 
     // Calculate monthly stats per user
-    const monthlyStats = {};
+    const monthlyStats: Record<string, MonthlyUserStats> = {};
     monthScores.forEach(score => {
         if (!monthlyStats[score.username]) {
             monthlyStats[score.username] = {
@@ -262,7 +284,9 @@ export function updateMonthlyLeaderboard() {
                 completedGames: 0,
                 failed: 0,
                 bestScore: 6,
-                points: 0
+                points: 0,
+                avgScore: 'N/A',
+                avgPoints: 'N/A'
             };
         }
 
@@ -333,8 +357,9 @@ export function updateMonthlyLeaderboard() {
 }
 
 // Update performance summary widget
-export function updatePerformanceSummary() {
+export function updatePerformanceSummary(): void {
     const container = document.getElementById('performanceSummary');
+    if (!container) return;
 
     if (state.allScores.length === 0) {
         container.innerHTML = '<p>No data available</p>';
@@ -393,8 +418,9 @@ export function updatePerformanceSummary() {
 }
 
 // Update score heatmap - assumes dates are already in EST timezone from database
-export function updateScoreHeatmap() {
+export function updateScoreHeatmap(): void {
     const container = document.getElementById('scoreHeatmap');
+    if (!container) return;
 
     if (state.allScores.length === 0) {
         container.innerHTML = '<p>No data available</p>';
@@ -408,7 +434,7 @@ export function updateScoreHeatmap() {
     const users = [...new Set(scoresToConsider.map(s => s.username))].sort();
     const dates = [...new Set(scoresToConsider.map(s => s.date))].sort().reverse();
 
-    const scoreMatrix = {};
+    const scoreMatrix: Record<string, Record<string, Score | null>> = {};
     users.forEach(user => {
         scoreMatrix[user] = {};
         dates.forEach(date => {
@@ -466,7 +492,7 @@ export function updateScoreHeatmap() {
                     const colors = ['#27ae60', '#2ecc71', '#f39c12', '#e67e22', '#e74c3c', '#c0392b'];
                     bgColor = colors[score.score - 1];
                     textColor = 'white';
-                    displayText = score.score;
+                    displayText = score.score.toString();
                 }
 
                 // Create Discord link if message_id exists
@@ -528,6 +554,4 @@ export function updateScoreHeatmap() {
     `;
 
     container.innerHTML = html;
-}
-
-// Stats view toggle functionality removed - not needed with current layout 
+} 

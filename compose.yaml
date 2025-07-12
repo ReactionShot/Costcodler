@@ -21,7 +21,9 @@ services:
       - "3000:3000"
 
   costcodle-tracker:
-    image: node:18-alpine
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: costcodle-tracker
     restart: unless-stopped
     
@@ -32,13 +34,10 @@ services:
     network_mode: service:costcodle-ts
     
     volumes:
-      - /opt/costcodle/app:/app
       - /opt/costcodle/data:/data
-      - /opt/costcodle/package.json:/app/package.json
     
-    working_dir: /app
-    
-    command: sh -c "npm install && node bot.js"
+    depends_on:
+      - costcodle-ts
 
 volumes:
   costcodle-ts:

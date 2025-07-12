@@ -10,6 +10,7 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./:/usr/src/app          # Live‑reload your entire repo
+      - ./:/usr/src/app          # Live-reload your entire repo
       - /opt/costcodle/data:/data
-    command: npx nodemon --watch bot --watch web bot/server.js 
+    # Use tsx for direct TypeScript execution in development
+    command: npx tsx --watch src/bot/server.ts 

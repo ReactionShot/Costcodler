@@ -1,19 +1,27 @@
-// web/js/api.js
+// src/web/api.ts
 import { state, API_BASE, filterDataForHeadToHead } from './state.js';
+import type { Score, UserStats, DailyStats, MessageType } from '../types/index.js';
 
 // Show message to user
-export function showMessage(text, type) {
+export function showMessage(text: string, type: MessageType): void {
     const messageDiv = document.getElementById('message');
-    messageDiv.innerHTML = `<div class="${type}">${text}</div>`;
-    if (type === 'success' || type === 'info') {
-        setTimeout(() => {
-            messageDiv.innerHTML = '';
-        }, 3000);
+    if (messageDiv) {
+        messageDiv.innerHTML = `<div class="${type}">${text}</div>`;
+        if (type === 'success' || type === 'info') {
+            setTimeout(() => {
+                messageDiv.innerHTML = '';
+            }, 3000);
+        }
     }
 }
 
 // Refresh all data from API
-export async function refreshData() {
+export async function refreshData(): Promise<{
+    isEmpty: boolean;
+    scores: Score[];
+    users: UserStats[];
+    daily: DailyStats[];
+}> {
     try {
         showMessage('Refreshing data...', 'info');
 
@@ -58,7 +66,8 @@ export async function refreshData() {
         };
     } catch (error) {
         console.error('Refresh error:', error);
-        showMessage('Error refreshing data: ' + error.message, 'error');
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        showMessage('Error refreshing data: ' + errorMessage, 'error');
 
         // Initialize empty arrays on error
         state.allScores = [];
@@ -70,7 +79,7 @@ export async function refreshData() {
 }
 
 // Export data to CSV - Fixed to include all data and sort by message_date
-export function exportData() {
+export function exportData(): void {
     if (state.allScores.length === 0) {
         showMessage('No data to export. Please refresh data first.', 'error');
         return;
@@ -81,9 +90,9 @@ export function exportData() {
 
     // Sort by message_date (or created_at as fallback) descending
     const sortedScores = [...scoresToExport].sort((a, b) => {
-        const dateA = new Date(a.message_date || a.created_at);
-        const dateB = new Date(b.message_date || b.created_at);
-        return dateB - dateA; // Most recent first
+        const dateA = new Date(a.message_date || a.created_at || '');
+        const dateB = new Date(b.message_date || b.created_at || '');
+        return dateB.getTime() - dateA.getTime(); // Most recent first
     });
 
     let csv = 'Date,Username,Score,Failed,Message_ID,Message_Date,Created_At\n';

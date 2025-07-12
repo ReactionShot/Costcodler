@@ -1,32 +1,38 @@
-const validator = require('validator');
+import validator from 'validator';
+
+// Type definitions for parsing results
+export interface ParsedCostcodleScore {
+    score: number | null;
+    failed: boolean;
+}
 
 // Input validation functions
-function validateUsername(username) {
+export function validateUsername(username: string): boolean {
     return typeof username === 'string' &&
            username.length >= 1 &&
            username.length <= 32 &&
            /^[a-zA-Z0-9_.-]+$/.test(username);
 }
 
-function validateScore(score) {
+export function validateScore(score: number): boolean {
     return Number.isInteger(score) && score >= 1 && score <= 6;
 }
 
-function validateDate(date) {
+export function validateDate(date: string): boolean {
     return validator.isDate(date) && new Date(date) <= new Date();
 }
 
-function validateMessageId(messageId) {
+export function validateMessageId(messageId: string): boolean {
     return typeof messageId === 'string' &&
            /^\d{17,19}$/.test(messageId); // Discord snowflake format
 }
 
-function validateChannelId(channelId) {
+export function validateChannelId(channelId: string): boolean {
     return typeof channelId === 'string' &&
            /^\d{17,19}$/.test(channelId); // Discord snowflake format
 }
 
-function sanitizeMessage(message) {
+export function sanitizeMessage(message: string): string {
     return validator.escape(message.substring(0, 500)); // Limit length and escape HTML
 }
 
@@ -34,7 +40,7 @@ function sanitizeMessage(message) {
 const costcodleRegex = /Costcodle\s+#?(\d{1,4})\s+([1-6X])\/6/i;
 
 // Function to parse Costcodle score from message
-function parseCostcodleScore(content) {
+export function parseCostcodleScore(content: string): ParsedCostcodleScore | null {
     const match = content.match(costcodleRegex);
     if (match) {
         const scoreStr = match[2].toUpperCase();
@@ -42,21 +48,11 @@ function parseCostcodleScore(content) {
         if (scoreStr === 'X') {
             return { score: null, failed: true }; // Failed attempt
         } else {
-            const score = parseInt(scoreStr);
+            const score = parseInt(scoreStr, 10);
             if (validateScore(score)) {
                 return { score: score, failed: false };
             }
         }
     }
     return null;
-}
-
-module.exports = {
-    validateUsername,
-    validateScore,
-    validateDate,
-    validateMessageId,
-    validateChannelId,
-    sanitizeMessage,
-    parseCostcodleScore
-}; 
+} 
