@@ -1,0 +1,239 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    color: #333;
+}
+
+.container {
+    max-width: 1600px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.header {
+    text-align: center;
+    background: rgba(255, 255, 255, 0.95);
+    padding: 30px;
+    border-radius: 20px;
+    margin-bottom: 30px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+}
+
+.header h1 {
+    font-size: 2.5em;
+    color: #4a5568;
+    margin-bottom: 10px;
+}
+
+.header p {
+    color: #718096;
+    font-size: 1.1em;
+}
+
+.controls {
+    background: rgba(255, 255, 255, 0.95);
+    padding: 20px;
+    border-radius: 15px;
+    margin-bottom: 30px;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+}
+
+.controls button {
+    background: #667eea;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 16px;
+    margin-right: 10px;
+    transition: background 0.3s;
+}
+
+.controls button:hover {
+    background: #5a6fd8;
+}
+
+.controls button.head-to-head {
+    background: #e74c3c;
+}
+
+.controls button.head-to-head:hover {
+    background: #c0392b;
+}
+
+.controls button.head-to-head.active {
+    background: #c0392b;
+    box-shadow: 0 0 10px rgba(231, 76, 60, 0.3);
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: auto auto auto auto;
+    gap: 30px;
+    margin-bottom: 30px;
+}
+
+/* Full-width line charts */
+.full-width {
+    grid-column: 1 / -1;
+}
+
+/* Wide screens get 3 columns x 4 rows */
+@media (min-width: 1400px) {
+    .grid {
+        grid-template-columns: repeat(3, 1fr);
+        grid-template-rows: auto auto auto auto;
+    }
+}
+
+/* Mobile gets single column */
+@media (max-width: 768px) {
+    .grid {
+        grid-template-columns: 1fr;
+    }
+
+    .container {
+        padding: 10px;
+    }
+}
+
+.card {
+    background: rgba(255, 255, 255, 0.95);
+    padding: 25px;
+    border-radius: 15px;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+}
+
+.card h2 {
+    color: #4a5568;
+    margin-bottom: 20px;
+    font-size: 1.5em;
+}
+
+.chart-container {
+    position: relative;
+    height: 400px;
+    margin-bottom: 20px;
+}
+
+.stats-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+
+.stats-table th,
+.stats-table td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.stats-table th {
+    background: #f7fafc;
+    color: #4a5568;
+    font-weight: 600;
+}
+
+.stats-table tr:hover {
+    background: #f9fafb;
+}
+
+.loading {
+    text-align: center;
+    padding: 40px;
+    color: #718096;
+}
+
+.error {
+    background: #fed7d7;
+    color: #c53030;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.success {
+    background: #c6f6d5;
+    color: #2d7748;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.8em;
+    font-weight: 600;
+    color: white;
+}
+
+.badge.best {
+    background: #48bb78;
+}
+
+.badge.good {
+    background: #4299e1;
+}
+
+.badge.average {
+    background: #ed8936;
+}
+
+.badge.poor {
+    background: #f56565;
+}
+
+.achievement-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    margin: 4px 0;
+    border-radius: 6px;
+    background: #f8f9fa;
+    border-left: 3px solid #48bb78;
+    font-size: 14px;
+}
+
+.achievement-item .icon {
+    font-size: 18px;
+    margin-right: 10px;
+    width: 24px;
+    text-align: center;
+}
+
+.achievement-details {
+    flex-grow: 1;
+}
+
+.achievement-title {
+    font-weight: bold;
+    color: #4a5568;
+}
+
+.achievement-desc {
+    font-size: 12px;
+    color: #666;
+    margin-top: 2px;
+}
+
+.user-achievements {
+    margin-bottom: 15px;
+}
+
+.user-achievements h4 {
+    color: #667eea;
+    margin-bottom: 8px;
+    font-size: 16px;
+} 

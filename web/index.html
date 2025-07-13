@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Costcodle Score Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <link rel="stylesheet" href="/css/dashboard.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🛒 Costcodle Dashboard</h1>
+            <p>Track your group's Costcodle performance over time</p>
+        </div>
+
+        <div class="controls">
+            <button id="refreshBtn">Refresh Data</button>
+            <button id="exportBtn">Export CSV</button>
+            <button id="headToHeadBtn" class="head-to-head">⚔️ Head to Head</button>
+            <span id="lastUpdate" style="margin-left: 20px; color: #666;"></span>
+        </div>
+
+        <div id="message"></div>
+
+        <div class="grid">
+            <div class="card full-width">
+                <h2>📊 User Statistics</h2>
+                <div id="userStats" class="loading">Loading...</div>
+            </div>
+
+            <div class="card">
+                <h2>🏆 Monthly Leaderboard</h2>
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;">
+                    <button id="prevMonthBtn" style="background: #667eea; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px;">← Previous</button>
+                    <span id="currentMonthDisplay" style="font-weight: bold; color: #667eea;"></span>
+                    <button id="nextMonthBtn" style="background: #667eea; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px;">Next →</button>
+                </div>
+                <div id="monthlyLeaderboard" class="loading">Loading...</div>
+            </div>
+
+            <div class="card">
+                <h2>🏆 Score Distribution</h2>
+                <div class="chart-container">
+                    <canvas id="distributionChart"></canvas>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>📈 Performance Summary</h2>
+                <div id="performanceSummary" class="loading">Loading...</div>
+            </div>
+
+            <div class="card full-width">
+                <h2>🎖️ Achievements</h2>
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;">
+                    <button id="toggleAchievementsBtn" style="background: #667eea; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px;">Hide All</button>
+                    <span style="font-size: 14px; color: #666;">Click on a player name in User Statistics to see their achievements</span>
+                    <div></div>
+                </div>
+                <div id="achievementsWidget" class="loading">Loading...</div>
+            </div>
+
+            <div class="card full-width">
+                <h2>📈 Average Score Trends</h2>
+                <div class="chart-container">
+                    <canvas id="trendsChart"></canvas>
+                </div>
+            </div>
+
+            <div class="card full-width">
+                <h2>📅 Daily Performance</h2>
+                <div class="chart-container">
+                    <canvas id="dailyChart"></canvas>
+                </div>
+            </div>
+
+            <div class="card full-width">
+                <h2>🎯 Individual Progress</h2>
+                <div class="chart-container">
+                    <canvas id="progressChart"></canvas>
+                </div>
+            </div>
+
+            <div class="card full-width">
+                <h2>🗓️ Score Heatmap</h2>
+                <div id="heatmapContainer" style="height: 700px; overflow-x: auto;">
+                    <div id="scoreHeatmap"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="/main.js"></script>
+</body>
+</html> 

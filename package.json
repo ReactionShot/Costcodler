@@ -2,25 +2,59 @@
   "name": "costcodle-tracker",
   "version": "1.0.0",
   "description": "Discord bot to track Costcodle scores and display statistics",
-  "main": "bot.js",
+  "main": "dist/bot/server.js",
+  "type": "module",
   "scripts": {
-    "start": "node bot.js",
-    "dev": "nodemon bot.js"
+    "build": "tsc --build",
+    "build:bot": "tsc --project src/bot",
+    "build:web": "tsc --project src/web",
+    "build:clean": "rimraf dist",
+    "build:watch": "tsc --build --watch",
+    "start": "node dist/bot/server.js",
+    "start:js": "node bot/server.js",
+    "dev": "concurrently \"npm run build:watch\" \"nodemon --watch dist/bot dist/bot/server.js\"",
+    "dev:js": "nodemon --watch bot --watch web bot/server.js",
+    "dev:no-discord": "NODE_ENV=development concurrently \"npm run build:watch\" \"nodemon --watch dist/bot dist/bot/server.js\"",
+    "dev:no-discord:js": "NODE_ENV=development nodemon --watch bot --watch web bot/server.js",
+    "dev:ts": "tsx watch src/bot/server.ts",
+    "dev:ts:no-discord": "NODE_ENV=development tsx watch src/bot/server.ts",
+        "lint": "eslint src/**/*.ts",
+    "type-check": "tsc --noEmit",
+    "clean": "npm run build:clean"
   },
   "dependencies": {
+    "cors": "^2.8.5",
     "discord.js": "^14.14.1",
     "express": "^4.18.2",
-    "sqlite3": "^5.1.6",
-    "cors": "^2.8.5",
     "express-rate-limit": "^7.1.5",
     "helmet": "^7.1.0",
+    "sqlite3": "^5.1.6",
     "validator": "^13.11.0"
   },
   "devDependencies": {
-    "nodemon": "^3.0.2"
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.10.6",
+    "@types/sqlite3": "^3.1.11",
+    "@types/validator": "^13.11.7",
+    "@typescript-eslint/eslint-plugin": "^6.16.0",
+    "@typescript-eslint/parser": "^6.16.0",
+    "concurrently": "^8.2.2",
+    "eslint": "^8.56.0",
+    "live-server": "^1.2.2",
+    "nodemon": "^3.0.2",
+    "rimraf": "^5.0.5",
+    "tsx": "^4.6.2",
+    "typescript": "^5.3.3"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   },
-  "keywords": ["discord", "bot", "costcodle", "tracking"]
+  "keywords": [
+    "discord",
+    "bot",
+    "costcodle",
+    "tracking",
+    "typescript"
+  ]
 }

@@ -1,0 +1,121 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn
+package-lock.json
+
+# Environment variables
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+/data/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+.nyc_output/
+
+# Build directories
+build/
+dist/
+out/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Editor directories and files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+.sublime-workspace
+.sublime-project
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Docker (uncomment if you want to ignore docker files)
+# Dockerfile
+# docker-compose*.yml
+# .dockerignore
+
+# Optional: If you want to ignore specific Docker volumes/data
+# /postgres-data/
+# /redis-data/
+
+# Node.js specific
+.node_repl_history
+.npm
+.eslintcache
+
+# Optional: Ignore VS Code settings (uncomment if you don't want to share VS Code config)
+# .vscode/
+
+# Optional: Ignore JetBrains IDE files
+# .idea/
+
+# MacOS
+.AppleDouble
+.LSOverride
+
+# Windows
+[Dd]esktop.ini
+$RECYCLE.BIN/
+
+# Linux
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# Test files (if you add testing later)
+.nyc_output/
+coverage/
+test-results/
+playwright-report/
+
+# Backup files
+*.backup
+*.bak
+*.old
+
+# Lock files (you may want to commit these, but they can cause conflicts)
+# Uncomment the one you're NOT using:
+# yarn.lock
+# package-lock.json 

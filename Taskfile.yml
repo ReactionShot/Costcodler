@@ -1,0 +1,281 @@
+version: '3'
+
+vars:
+  APP_NAME: costcodle-tracker
+  NODE_VERSION: 18
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmd: task --list
+
+  # Installation tasks
+  install:
+    desc: Install dependencies
+    cmd: npm install
+    
+  install:ts:
+    desc: Install TypeScript dependencies
+    cmd: npm install && npm install -g typescript
+
+  # TypeScript tasks
+  build:
+    desc: Build TypeScript code (both backend and frontend)
+    cmd: npm run build
+    
+  build:bot:
+    desc: Build backend TypeScript code
+    cmd: npm run build:bot
+    
+  build:web:
+    desc: Build frontend TypeScript code
+    cmd: npm run build:web
+    
+  build:watch:
+    desc: Build TypeScript code in watch mode
+    cmd: npm run build:watch
+    
+  build:clean:
+    desc: Clean TypeScript build output
+    cmd: npm run build:clean
+    
+  type-check:
+    desc: Type check TypeScript code without building
+    cmd: npm run type-check
+
+  # Development tasks
+  dev:
+    desc: Start development server with TypeScript build watching
+    cmd: npm run dev
+    
+  dev:ts:
+    desc: Start development server with tsx (direct TypeScript execution)
+    cmd: npm run dev:ts
+    
+  dev:ts:no-discord:
+    desc: Start development server with tsx without Discord bot
+    cmd: npm run dev:ts:no-discord
+    
+  dev:no-discord:
+    desc: Start development server without Discord bot (TypeScript build watching)
+    cmd: npm run dev:no-discord
+
+  # Legacy JavaScript support (for backwards compatibility)
+  dev:js:
+    desc: Start development server with JavaScript (legacy)
+    cmd: npm run dev:js
+    
+  dev:js:no-discord:
+    desc: Start development server without Discord bot (JavaScript legacy)
+    cmd: npm run dev:js:no-discord
+
+  dev:watch:
+    desc: Start development server with file watching (TypeScript)
+    cmd: npm run build:watch
+    
+  # Frontend development
+  web:serve:
+    desc: Serve the web directory for frontend-only development
+    cmd: npx http-server web -p 8080 -o
+    
+  web:serve:dist:
+    desc: Serve the built web directory for frontend testing
+    cmd: npx http-server dist/web -p 8080 -o
+    
+  web:test:
+    desc: Test frontend modules (TypeScript syntax check)
+    cmd: |
+      echo "Checking TypeScript syntax..."
+      npx tsc --noEmit --project src/web
+      echo "✅ All frontend TypeScript modules are valid"
+
+  # Database tasks
+  db:reset:
+    desc: Reset the database (delete and recreate)
+    cmd: |
+      rm -f costcodle_scores.db
+      echo "Database reset. It will be recreated on next server start."
+      
+  db:backup:
+    desc: Backup the database
+    cmd: |
+      cp costcodle_scores.db "costcodle_scores_backup_$(date +%Y%m%d_%H%M%S).db"
+      echo "Database backed up"
+      
+  db:inspect:
+    desc: Open SQLite CLI to inspect database
+    cmd: sqlite3 costcodle_scores.db
+
+  # Docker tasks
+  docker:dev:
+    desc: Run development environment with Docker
+    cmd: docker compose -f compose.dev.yml up --build
+    
+  docker:dev:down:
+    desc: Stop development Docker environment
+    cmd: docker compose -f compose.dev.yml down
+    
+  docker:prod:
+    desc: Run production environment with Docker
+    cmd: docker compose up -d
+    
+  docker:prod:down:
+    desc: Stop production Docker environment
+    cmd: docker compose down
+    
+  docker:logs:
+    desc: View Docker container logs
+    cmd: docker compose logs -f {{.APP_NAME}}
+    
+  docker:rebuild:
+    desc: Rebuild and restart Docker containers
+    cmd: |
+      docker compose down
+      docker compose build --no-cache
+      docker compose up -d
+
+  # Maintenance tasks
+  clean:
+    desc: Clean up generated files and caches
+    cmd: |
+      npm run build:clean
+      rm -rf node_modules/.cache
+      rm -f *.log
+      rm -f costcodle_scores_backup_*.db
+      echo "Cleanup complete"
+      
+  lint:
+    desc: Check TypeScript code style
+    cmd: npm run lint
+
+  lint:js:
+    desc: Check JavaScript code style (legacy)
+    cmd: npm run lint:js
+
+  lint:fix:
+    desc: Fix TypeScript linting issues
+    cmd: npx eslint src/**/*.ts --fix
+
+  # Testing tasks
+  test:api:
+    desc: Test API endpoints (requires server to be running)
+    cmd: |
+      echo "Testing API endpoints..."
+      curl -s http://localhost:3000/api/users | jq '.' > /dev/null && echo "✅ /api/users OK" || echo "❌ /api/users failed"
+      curl -s http://localhost:3000/api/scores | jq '.' > /dev/null && echo "✅ /api/scores OK" || echo "❌ /api/scores failed"
+      curl -s http://localhost:3000/api/daily-stats | jq '.' > /dev/null && echo "✅ /api/daily-stats OK" || echo "❌ /api/daily-stats failed"
+    preconditions:
+      - sh: command -v curl
+        msg: "curl is required for API testing"
+      - sh: command -v jq
+        msg: "jq is required for JSON parsing"
+
+  test:build:
+    desc: Test that TypeScript builds successfully
+    cmd: |
+      echo "Testing TypeScript build..."
+      npm run build:clean
+      npm run build
+      echo "✅ TypeScript build successful"
+
+  test:types:
+    desc: Test TypeScript types without building
+    cmd: |
+      echo "Testing TypeScript types..."
+      npm run type-check
+      echo "✅ TypeScript types are valid"
+
+  # Production tasks
+  prod:deploy:
+    desc: Deploy to production (assumes Docker environment)
+    cmd: |
+      echo "Deploying to production..."
+      git pull
+      npm run build
+      docker compose build
+      docker compose up -d
+      echo "Deployment complete"
+
+  prod:backup:
+    desc: Backup production data
+    cmd: |
+      docker compose exec {{.APP_NAME}} cp /data/costcodle_scores.db /data/backup_$(date +%Y%m%d_%H%M%S).db
+      echo "Production backup complete"
+
+  # Development utilities
+  generate:mock:
+    desc: Generate fresh mock data for development
+    cmd: |
+      echo "Starting server to generate fresh mock data..."
+      NODE_ENV=development node -e "
+        console.log('Mock data will be generated when server starts without Discord token');
+        console.log('Run: task dev:no-discord');
+      "
+
+  check:env:
+    desc: Check environment configuration
+    cmd: |
+      echo "Environment Check:"
+      echo "==================="
+      node --version | sed 's/^/Node.js: /'
+      npm --version | sed 's/^/npm: /'
+      npx tsc --version | sed 's/^/TypeScript: /' 2>/dev/null || echo "TypeScript: ❌ Not installed"
+      echo -n "Discord Token: "
+      if [ -n "$DISCORD_TOKEN" ]; then echo "✅ Set"; else echo "❌ Not set (will use mock data)"; fi
+      echo -n "Database: "
+      if [ -f "costcodle_scores.db" ]; then echo "✅ Exists"; else echo "⚠️  Will be created on first run"; fi
+      echo -n "Docker: "
+      if command -v docker >/dev/null 2>&1; then echo "✅ Available"; else echo "❌ Not installed"; fi
+      echo -n "TypeScript Build: "
+      if [ -d "dist" ]; then echo "✅ Built"; else echo "⚠️  Not built (run 'task build')"; fi
+      echo -n "TypeScript Source: "
+      if [ -d "src" ]; then echo "✅ Available"; else echo "❌ Missing source directory"; fi
+
+  # Quick commands
+  start:
+    desc: Start production server (TypeScript)
+    cmd: npm start
+    
+  start:js:
+    desc: Start production server (JavaScript legacy)
+    cmd: npm run start:js
+    
+  logs:
+    desc: View application logs (if running in Docker)
+    cmd: task docker:logs
+    
+  stop:
+    desc: Stop all running containers
+    cmd: |
+      docker compose -f compose.dev.yml down 2>/dev/null || true
+      docker compose down 2>/dev/null || true
+      echo "All containers stopped"
+
+  # TypeScript specific shortcuts
+  ts:build:
+    desc: Quick TypeScript build
+    cmd: task build
+    
+  ts:dev:
+    desc: Quick TypeScript development start
+    cmd: task dev:ts
+    
+  ts:check:
+    desc: Quick TypeScript type check
+    cmd: task type-check
+
+  # Development workflow shortcuts
+  quick:start:
+    desc: Quick start development (build and run)
+    cmd: |
+      echo "Building and starting development server..."
+      task build
+      task dev:ts:no-discord
+
+  quick:test:
+    desc: Quick test (type check + build test)
+    cmd: |
+      echo "Running quick tests..."
+      task type-check
+      task test:build
+      echo "✅ All tests passed" 
